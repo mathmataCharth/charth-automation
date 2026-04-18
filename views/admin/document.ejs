@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= doc.title %> - SecureView Admin</title>
+    <link rel="stylesheet" href="/public/shared/css/base.css">
+    <link rel="stylesheet" href="/public/admin/css/admin.css">
+</head>
+<body>
+    <header class="admin-header">
+        <div class="header-inner">
+            <span class="header-brand">SecureView Admin</span>
+            <nav class="header-nav">
+                <a href="/admin/dashboard" class="nav-link">Dashboard</a>
+                <a href="/admin/logs" class="nav-link">Logs</a>
+                <form method="POST" action="/admin/logout" style="display:inline;">
+                    <button type="submit" class="btn btn-outline-sm">Sair (<%= adminUsername %>)</button>
+                </form>
+            </nav>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <div class="page-title-row">
+            <a href="/admin/dashboard" class="back-link">&#8592; Dashboard</a>
+            <h2><%= doc.title %></h2>
+        </div>
+
+        <!-- Document Info -->
+        <div class="card mb-24">
+            <div class="card-header card-header-flex">
+                <h3>Informações do Documento</h3>
+                <div class="card-header-actions">
+                    <form method="POST" action="/admin/documents/<%= doc.id %>/toggle" style="display:inline;">
+                        <button type="submit" class="btn btn-sm <%= doc.is_active ? 'btn-warning' : 'btn-success' %>">
+                            <%= doc.is_active ? 'Desativar Documento' : 'Ativar Documento' %>
+                        </button>
+                    </form>
+                    <form method="POST" action="/admin/documents/<%= doc.id %>/delete" style="display:inline;" class="confirm-delete" data-message="Desativar este documento permanentemente?">
+                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                <dl class="info-grid">
+                    <dt>ID</dt><dd>#<%= doc.id %></dd>
+                    <dt>Título</dt><dd><%= doc.title %></dd>
+                    <dt>Arquivo</dt><dd><%= doc.original_filename %></dd>
+                    <dt>Tamanho</dt><dd><%= (doc.file_size / 1024 / 1024).toFixed(2) %> MB</dd>
+                    <dt>Páginas</dt><dd><%= doc.page_count || '—' %></dd>
+                    <dt>Upload em</dt><dd><%= doc.uploaded_at.slice(0, 16).replace('T', ' ') %></dd>
+                    <dt>Status</dt>
+                    <dd>
+                        <% if (doc.is_active) { %>
+                            <span class="badge badge-success">Ativo</span>
+                        <% } else { %>
+                            <span class="badge badge-danger">Inativo</span>
+                        <% } %>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Create New Link -->
+        <div class="card mb-24">
+            <div class="card-header">
+                <h3>Criar Novo Acesso</h3>
+            </div>
+            <div class="card-body">
+                <% if (typeof linkError !== 'undefined' && linkError) { %>
+                    <div class="alert alert-error"><%= linkError %></div>
+                <% } %>
+                <form method="POST" action="/admin/documents/<%= doc.id %>/links" class="link-form">
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="recipient_name">Nome do Destinatário *</label>
+                            <input type="text" id="recipient_name" name="recipient_name" class="form-control" required placeholder="Ex: João Silva">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="recipient_email">E-mail (opcional)</label>
+                            <input type="email" id="recipient_email" name="recipient_email" class="form-control" placeholder="joao@exemplo.com">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="password">Senha de Acesso *</label>
+                            <input type="text" id="password" name="password" class="form-control" required placeholder="Mínimo 4 caracteres">
+                        </div>
+                        <div class="form-group">
+                            <label for="max_views">Máx. Visualizações</label>
+                            <input type="number" id="max_views" name="max_views" class="form-control" min="1" placeholder="Ilimitado">
+                        </div>
+                        <div class="form-group">
+                            <label for="expires_at">Expira em</label>
+                            <input type="datetime-local" id="expires_at" name="expires_at" class="form-control">
+                        </div>
+                        <div class="form-group align-bottom">
+                            <button type="submit" class="btn btn-primary">Criar Acesso</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Links Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Acessos Criados (<%= links.length %>)</h3>
+            </div>
+            <div class="card-body p-0">
+                <% if (links.length === 0) { %>
+                    <p class="empty-state">Nenhum acesso criado ainda. Crie um acesso acima.</p>
+                <% } else { %>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Destinatário</th>
+                                    <th>E-mail</th>
+                                    <th>Link</th>
+                                    <th>Views</th>
+                                    <th>Expira em</th>
+                                    <th>Status</th>
+                                    <th>Criado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% links.forEach(link => { %>
+                                    <% const linkUrl = baseUrl + '/v/' + link.token; %>
+                                    <tr class="<%= link.is_active ? '' : 'row-inactive' %>">
+                                        <td><strong><%= link.recipient_name %></strong></td>
+                                        <td class="text-sm text-muted"><%= link.recipient_email || '—' %></td>
+                                        <td class="text-sm">
+                                            <span class="link-truncate" title="<%= linkUrl %>">
+                                                <%= link.token.slice(0, 12) %>...
+                                            </span>
+                                            <button
+                                                class="btn btn-xs btn-secondary copy-link-btn"
+                                                data-url="<%= linkUrl %>"
+                                            >Copiar</button>
+                                        </td>
+                                        <td>
+                                            <%= link.views_count %>
+                                            <% if (link.max_views) { %>
+                                                / <%= link.max_views %>
+                                            <% } %>
+                                        </td>
+                                        <td class="text-sm">
+                                            <% if (link.expires_at) { %>
+                                                <%= link.expires_at.slice(0, 16).replace('T', ' ') %>
+                                            <% } else { %>
+                                                —
+                                            <% } %>
+                                        </td>
+                                        <td>
+                                            <% if (link.is_active) { %>
+                                                <span class="badge badge-success">Ativo</span>
+                                            <% } else { %>
+                                                <span class="badge badge-danger">Inativo</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="text-sm"><%= link.created_at.slice(0, 16).replace('T', ' ') %></td>
+                                        <td class="actions-cell">
+                                            <form method="POST" action="/admin/links/<%= link.id %>/toggle" style="display:inline;">
+                                                <button type="submit" class="btn btn-xs <%= link.is_active ? 'btn-warning' : 'btn-success' %>">
+                                                    <%= link.is_active ? 'Desativar' : 'Ativar' %>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="/admin/links/<%= link.id %>/delete" style="display:inline;" class="confirm-delete" data-message="Remover este acesso permanentemente?">
+                                                <button type="submit" class="btn btn-xs btn-danger">Remover</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast hidden">Link copiado!</div>
+
+    <script src="/public/admin/js/admin.js"></script>
+</body>
+</html>

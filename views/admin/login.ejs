@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SecureView Admin</title>
+    <link rel="stylesheet" href="/public/shared/css/base.css">
+    <link rel="stylesheet" href="/public/admin/css/admin.css">
+    <style>
+        .login-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-dark);
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 40px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+        }
+        .login-card h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            color: var(--text-dark);
+        }
+        .login-card p.subtitle {
+            color: #666;
+            margin-bottom: 28px;
+            font-size: 0.9rem;
+        }
+        .login-card .error-box {
+            background: #fdecea;
+            color: #c0392b;
+            border: 1px solid #f1948a;
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-bottom: 18px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <h1>SecureView Admin</h1>
+            <p class="subtitle">Painel de administração</p>
+
+            <% if (error) { %>
+                <div class="error-box"><%= error %></div>
+            <% } %>
+
+            <form method="POST" action="/admin/login" autocomplete="off">
+                <div class="form-group">
+                    <label for="username">Usuário</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        class="form-control"
+                        required
+                        autofocus
+                        autocomplete="username"
+                    >
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="form-control"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%; margin-top:8px;">
+                    Entrar
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

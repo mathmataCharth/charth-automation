@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/public/viewer/css/viewer.css">
+</head>
+<body>
+    <div id="toolbar">
+        <button id="btn-prev" title="Página anterior" disabled>&#9664;</button>
+        <input type="number" id="page-input" value="1" min="1" max="<%= pageCount %>">
+        <span style="color:#aaa;font-size:14px;">/ <span id="total-pages"><%= pageCount %></span></span>
+        <button id="btn-next" title="Próxima página">&#9654;</button>
+        <span style="display:inline-block;width:1px;height:24px;background:#444;margin:0 4px;"></span>
+        <button id="btn-zoom-out" title="Reduzir zoom">&#8722;</button>
+        <span id="zoom-label" style="color:#ccc;font-size:13px;min-width:44px;text-align:center;">150%</span>
+        <button id="btn-zoom-in" title="Aumentar zoom">&#43;</button>
+        <button id="btn-zoom-fit" title="Ajustar à janela">Ajustar</button>
+    </div>
+
+    <div id="canvas-container" class="viewer-container">
+        <canvas
+            id="pdf-canvas"
+            data-url="/api/pdf/<%= token %>/document"
+            data-pages="<%= pageCount %>"
+        ></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="/public/viewer/js/viewer.js"></script>
+</body>
+</html>

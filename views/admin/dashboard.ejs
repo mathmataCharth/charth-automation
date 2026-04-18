@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SecureView Admin</title>
+    <link rel="stylesheet" href="/public/shared/css/base.css">
+    <link rel="stylesheet" href="/public/admin/css/admin.css">
+</head>
+<body>
+    <header class="admin-header">
+        <div class="header-inner">
+            <span class="header-brand">SecureView Admin</span>
+            <nav class="header-nav">
+                <a href="/admin/dashboard" class="nav-link active">Dashboard</a>
+                <a href="/admin/logs" class="nav-link">Logs</a>
+                <form method="POST" action="/admin/logout" style="display:inline;">
+                    <button type="submit" class="btn btn-outline-sm">Sair (<%= adminUsername %>)</button>
+                </form>
+            </nav>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        <div class="page-title-row">
+            <h2>Documentos</h2>
+        </div>
+
+        <!-- Upload Form -->
+        <div class="card mb-24">
+            <div class="card-header">
+                <h3>Novo Documento</h3>
+            </div>
+            <div class="card-body">
+                <% if (typeof uploadError !== 'undefined' && uploadError) { %>
+                    <div class="alert alert-error"><%= uploadError %></div>
+                <% } %>
+                <form method="POST" action="/admin/documents/upload" enctype="multipart/form-data" class="upload-form">
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="title">Título do documento</label>
+                            <input type="text" id="title" name="title" class="form-control" required placeholder="Ex: Contrato de Prestação de Serviços">
+                        </div>
+                        <div class="form-group">
+                            <label for="pdf">Arquivo PDF</label>
+                            <input type="file" id="pdf" name="pdf" class="form-control" accept=".pdf" required>
+                        </div>
+                        <div class="form-group align-bottom">
+                            <button type="submit" class="btn btn-primary">Fazer Upload</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Documents Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Documentos Cadastrados (<%= documents.length %>)</h3>
+            </div>
+            <div class="card-body p-0">
+                <% if (documents.length === 0) { %>
+                    <p class="empty-state">Nenhum documento cadastrado ainda.</p>
+                <% } else { %>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Título</th>
+                                    <th>Arquivo Original</th>
+                                    <th>Páginas</th>
+                                    <th>Links Ativos</th>
+                                    <th>Upload em</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% documents.forEach(doc => { %>
+                                    <tr class="<%= doc.is_active ? '' : 'row-inactive' %>">
+                                        <td><strong><%= doc.title %></strong></td>
+                                        <td class="text-muted text-sm"><%= doc.original_filename %></td>
+                                        <td><%= doc.page_count || '—' %></td>
+                                        <td>
+                                            <span class="badge badge-info"><%= doc.active_links_count %></span>
+                                        </td>
+                                        <td class="text-sm"><%= doc.uploaded_at.slice(0, 16).replace('T', ' ') %></td>
+                                        <td>
+                                            <% if (doc.is_active) { %>
+                                                <span class="badge badge-success">Ativo</span>
+                                            <% } else { %>
+                                                <span class="badge badge-danger">Inativo</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="actions-cell">
+                                            <a href="/admin/documents/<%= doc.id %>" class="btn btn-sm btn-secondary">Detalhes</a>
+                                            <form method="POST" action="/admin/documents/<%= doc.id %>/toggle" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm <%= doc.is_active ? 'btn-warning' : 'btn-success' %>">
+                                                    <%= doc.is_active ? 'Desativar' : 'Ativar' %>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </main>
+
+    <script src="/public/admin/js/admin.js"></script>
+</body>
+</html>
