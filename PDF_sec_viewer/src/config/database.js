@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_access_links_token ON access_links(token);
 
 CREATE TABLE IF NOT EXISTS access_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    access_link_id INTEGER NOT NULL REFERENCES access_links(id),
+    access_link_id INTEGER NOT NULL REFERENCES access_links(id) ON DELETE CASCADE,
     ip_address TEXT,
     user_agent TEXT,
     action TEXT NOT NULL,
