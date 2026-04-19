@@ -237,8 +237,8 @@ function fitToWindow() {
 // Load PDF (com range requests + streaming habilitados por padrão)
 const loadingTask = pdfjsLib.getDocument({
     url: pdfUrl,
-    disableStream: false,
-    disableAutoFetch: true,  // evita baixar tudo antecipadamente
+    disableStream: true,     // NÃO baixa o arquivo todo via streaming na primeira req
+    disableAutoFetch: true,  // NÃO faz prefetch do resto em background
     rangeChunkSize: 262144   // 256 KB por chunk
 });
 
