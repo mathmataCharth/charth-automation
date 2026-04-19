@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const fs = require('fs');
 
 const { getLinkByToken, incrementViews } = require('../services/accessService');
 const { log } = require('../services/logService');
@@ -62,21 +63,67 @@ router.get('/pdf/:token/document', (req, res) => {
     const uploadDir = process.env.UPLOAD_DIR || './uploads';
     const filePath = path.resolve(uploadDir, link.stored_filename);
 
-    incrementViews(link.id);
+    let stat;
+    try {
+        stat = fs.statSync(filePath);
+    } catch (e) {
+        return res.status(404).json({ error: 'Arquivo não encontrado.' });
+    }
 
-    const ip = req.ip;
-    const ua = req.get('User-Agent') || '';
-    log(link.id, ip, ua, 'view_start', null);
+    const fileSize = stat.size;
+    const range = req.headers.range;
 
+    // Só conta view e loga na requisição inicial (sem Range ou Range começando em 0)
+    const isInitialRequest = !range || /^bytes=0-/.test(range);
+    if (isInitialRequest) {
+        incrementViews(link.id);
+        const ip = req.ip;
+        const ua = req.get('User-Agent') || '';
+        log(link.id, ip, ua, 'view_start', null);
+    }
+
+    // Headers comuns
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Accept-Ranges', 'bytes');
 
-    return res.sendFile(filePath, (err) => {
-        if (err && !res.headersSent) {
-            res.status(500).json({ error: 'Erro ao servir o arquivo.' });
+    if (range) {
+        // Parse "bytes=start-end"
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+        if (!match) {
+            res.setHeader('Content-Range', `bytes */${fileSize}`);
+            return res.status(416).end();
         }
+        let start = match[1] === '' ? 0 : parseInt(match[1], 10);
+        let end = match[2] === '' ? fileSize - 1 : parseInt(match[2], 10);
+
+        if (isNaN(start) || isNaN(end) || start > end || end >= fileSize) {
+            res.setHeader('Content-Range', `bytes */${fileSize}`);
+            return res.status(416).end();
+        }
+
+        const chunkSize = end - start + 1;
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+        res.setHeader('Content-Length', chunkSize);
+
+        const stream = fs.createReadStream(filePath, { start, end });
+        stream.on('error', () => {
+            if (!res.headersSent) res.status(500).end();
+            else res.destroy();
+        });
+        return stream.pipe(res);
+    }
+
+    // Sem Range: envia arquivo inteiro
+    res.setHeader('Content-Length', fileSize);
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', () => {
+        if (!res.headersSent) res.status(500).end();
+        else res.destroy();
     });
+    return stream.pipe(res);
 });
 
 module.exports = router;
