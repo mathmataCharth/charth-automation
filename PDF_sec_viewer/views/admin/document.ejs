@@ -3,19 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= doc.title %> - SecureView Admin</title>
+    <title><%= doc.title %> | SecureView Charth</title>
+    <link rel="icon" href="https://charth.vteximg.com.br/arquivos/favicon.ico">
     <link rel="stylesheet" href="/public/shared/css/base.css">
     <link rel="stylesheet" href="/public/admin/css/admin.css">
 </head>
 <body>
     <header class="admin-header">
         <div class="header-inner">
-            <span class="header-brand">SecureView Admin</span>
+            <a href="/admin/dashboard">
+                <img
+                    src="https://charth.vtexassets.com/assets/vtex/assets-builder/charth.store/1.1.133/img/logo-charth___cdf0830626d6b6c0798360d0e9cf8d7e.png"
+                    alt="Charth"
+                    class="header-logo"
+                >
+            </a>
             <nav class="header-nav">
-                <a href="/admin/dashboard" class="nav-link">Dashboard</a>
+                <a href="/admin/dashboard" class="nav-link">Documentos</a>
                 <a href="/admin/logs" class="nav-link">Logs</a>
                 <form method="POST" action="/admin/logout" style="display:inline;">
-                    <button type="submit" class="btn btn-outline-sm">Sair (<%= adminUsername %>)</button>
+                    <button type="submit" class="btn-outline-sm">Sair</button>
                 </form>
             </nav>
         </div>
@@ -23,7 +30,7 @@
 
     <main class="admin-main">
         <div class="page-title-row">
-            <a href="/admin/dashboard" class="back-link">&#8592; Dashboard</a>
+            <a href="/admin/dashboard" class="back-link">&#8592; Documentos</a>
             <h2><%= doc.title %></h2>
         </div>
 
@@ -34,10 +41,10 @@
                 <div class="card-header-actions">
                     <form method="POST" action="/admin/documents/<%= doc.id %>/toggle" style="display:inline;">
                         <button type="submit" class="btn btn-sm <%= doc.is_active ? 'btn-warning' : 'btn-success' %>">
-                            <%= doc.is_active ? 'Desativar Documento' : 'Ativar Documento' %>
+                            <%= doc.is_active ? 'Desativar' : 'Ativar' %>
                         </button>
                     </form>
-                    <form method="POST" action="/admin/documents/<%= doc.id %>/delete" style="display:inline;" class="confirm-delete" data-message="Desativar este documento permanentemente?">
+                    <form method="POST" action="/admin/documents/<%= doc.id %>/delete" style="display:inline;" class="confirm-delete" data-message="Excluir este documento permanentemente?">
                         <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
                     </form>
                 </div>
@@ -110,7 +117,7 @@
             </div>
             <div class="card-body p-0">
                 <% if (links.length === 0) { %>
-                    <p class="empty-state">Nenhum acesso criado ainda. Crie um acesso acima.</p>
+                    <p class="empty-state">Nenhum acesso criado ainda.</p>
                 <% } else { %>
                     <div class="table-responsive">
                         <table class="table">
@@ -143,16 +150,12 @@
                                         </td>
                                         <td>
                                             <%= link.views_count %>
-                                            <% if (link.max_views) { %>
-                                                / <%= link.max_views %>
-                                            <% } %>
+                                            <% if (link.max_views) { %>/ <%= link.max_views %><% } %>
                                         </td>
                                         <td class="text-sm">
                                             <% if (link.expires_at) { %>
                                                 <%= link.expires_at.slice(0, 16).replace('T', ' ') %>
-                                            <% } else { %>
-                                                —
-                                            <% } %>
+                                            <% } else { %>—<% } %>
                                         </td>
                                         <td>
                                             <% if (link.is_active) { %>

@@ -1,5 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap');
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #1a1a1a; color: #fff; font-family: sans-serif; overflow: hidden; }
+
+:root {
+    --charth-rose:    #E4D5D3;
+    --font-main:      'Jost', sans-serif;
+    --ls-label:       1.28px;
+    --transition:     all 0.3s ease;
+}
+
+body {
+    background: #1A1A1A;
+    color: #fff;
+    font-family: var(--font-main);
+    overflow: hidden;
+}
 
 /* Anti-print */
 @media print {
@@ -11,6 +26,7 @@ body { background: #1a1a1a; color: #fff; font-family: sans-serif; overflow: hidd
         font-size: 48px;
         text-align: center;
         padding-top: 40vh;
+        color: #000;
     }
 }
 
@@ -28,44 +44,118 @@ canvas {
     margin: 0 auto;
 }
 
+/* Toolbar */
 #toolbar {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     height: 48px;
-    background: #2d2d2d;
+    background: #000;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
+    justify-content: space-between;
+    padding: 0 20px;
     z-index: 100;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid #222;
+}
+
+.toolbar-logo {
+    height: 18px;
+    width: auto;
+    filter: invert(1);
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+
+.toolbar-center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 #toolbar button {
-    background: #444;
-    color: #fff;
-    border: none;
-    padding: 6px 12px;
+    background: transparent;
+    color: var(--charth-rose);
+    border: 1px solid #333;
+    padding: 5px 10px;
     cursor: pointer;
-    border-radius: 4px;
-    font-size: 14px;
+    border-radius: 2px;
+    font-size: 13px;
+    font-family: var(--font-main);
+    font-weight: 300;
+    transition: var(--transition);
 }
 
-#toolbar button:hover { background: #555; }
-#toolbar button:disabled { opacity: 0.4; cursor: default; }
+#toolbar button:hover {
+    background: #1A1A1A;
+    border-color: var(--charth-rose);
+}
+
+#toolbar button:disabled {
+    opacity: 0.3;
+    cursor: default;
+    color: #666;
+    border-color: #333;
+}
+
+#toolbar button#btn-zoom-fit {
+    color: #888;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--ls-label);
+}
+#toolbar button#btn-zoom-fit:hover {
+    color: var(--charth-rose);
+    border-color: var(--charth-rose);
+}
+
+.toolbar-page-info {
+    color: #666;
+    font-size: 12px;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+}
 
 #page-input {
-    width: 50px;
+    width: 44px;
     text-align: center;
-    background: #444;
-    color: #fff;
-    border: 1px solid #666;
+    background: #1A1A1A;
+    color: #ccc;
+    border: 1px solid #333;
     padding: 4px;
-    border-radius: 4px;
+    border-radius: 2px;
+    font-family: var(--font-main);
+    font-size: 13px;
+    font-weight: 300;
 }
 
+#page-input:focus {
+    outline: none;
+    border-color: var(--charth-rose);
+}
+
+#zoom-label {
+    color: #666;
+    font-size: 12px;
+    font-weight: 300;
+    min-width: 40px;
+    text-align: center;
+    font-family: var(--font-main);
+}
+
+/* Canvas area */
 #canvas-container {
     margin-top: 48px;
     height: calc(100vh - 48px);
@@ -73,14 +163,24 @@ canvas {
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding: 16px;
+    padding: 20px 16px;
+    background: #1A1A1A;
 }
+
+#canvas-container::-webkit-scrollbar { width: 6px; }
+#canvas-container::-webkit-scrollbar-track { background: #2A2A2A; }
+#canvas-container::-webkit-scrollbar-thumb { background-color: #4F4F4F; border-radius: 3px; }
+#canvas-container::-webkit-scrollbar-thumb:hover { background-color: #666; }
 
 #loading-msg {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: #aaa;
-    font-size: 1rem;
+    color: #666;
+    font-size: 0.82rem;
+    font-family: var(--font-main);
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: var(--ls-label);
 }

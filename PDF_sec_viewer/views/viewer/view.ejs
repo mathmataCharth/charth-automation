@@ -3,20 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= title %></title>
+    <title><%= title %> | SecureView Charth</title>
+    <link rel="icon" href="https://charth.vteximg.com.br/arquivos/favicon.ico">
     <link rel="stylesheet" href="/public/viewer/css/viewer.css">
 </head>
 <body>
     <div id="toolbar">
-        <button id="btn-prev" title="Página anterior" disabled>&#9664;</button>
-        <input type="number" id="page-input" value="1" min="1" max="<%= pageCount %>">
-        <span style="color:#aaa;font-size:14px;">/ <span id="total-pages"><%= pageCount %></span></span>
-        <button id="btn-next" title="Próxima página">&#9654;</button>
-        <span style="display:inline-block;width:1px;height:24px;background:#444;margin:0 4px;"></span>
-        <button id="btn-zoom-out" title="Reduzir zoom">&#8722;</button>
-        <span id="zoom-label" style="color:#ccc;font-size:13px;min-width:44px;text-align:center;">150%</span>
-        <button id="btn-zoom-in" title="Aumentar zoom">&#43;</button>
-        <button id="btn-zoom-fit" title="Ajustar à janela">Ajustar</button>
+        <img
+            src="https://charth.vtexassets.com/assets/vtex/assets-builder/charth.store/1.1.133/img/logo-charth___cdf0830626d6b6c0798360d0e9cf8d7e.png"
+            alt="Charth"
+            class="toolbar-logo"
+        >
+
+        <div class="toolbar-center">
+            <button id="btn-prev" title="Página anterior" disabled>&#9664;</button>
+            <input type="number" id="page-input" value="1" min="1" max="<%= pageCount %>">
+            <span class="toolbar-page-info">/ <span id="total-pages"><%= pageCount %></span></span>
+            <button id="btn-next" title="Próxima página">&#9654;</button>
+        </div>
+
+        <div class="toolbar-right">
+            <button id="btn-zoom-out" title="Reduzir zoom">&#8722;</button>
+            <span id="zoom-label">150%</span>
+            <button id="btn-zoom-in" title="Aumentar zoom">&#43;</button>
+            <button id="btn-zoom-fit" title="Ajustar à janela">Ajustar</button>
+        </div>
     </div>
 
     <div id="canvas-container" class="viewer-container">

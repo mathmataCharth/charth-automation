@@ -3,19 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - SecureView Admin</title>
+    <title>SecureView | Charth</title>
+    <link rel="icon" href="https://charth.vteximg.com.br/arquivos/favicon.ico">
     <link rel="stylesheet" href="/public/shared/css/base.css">
     <link rel="stylesheet" href="/public/admin/css/admin.css">
 </head>
 <body>
     <header class="admin-header">
         <div class="header-inner">
-            <span class="header-brand">SecureView Admin</span>
+            <a href="/admin/dashboard">
+                <img
+                    src="https://charth.vtexassets.com/assets/vtex/assets-builder/charth.store/1.1.133/img/logo-charth___cdf0830626d6b6c0798360d0e9cf8d7e.png"
+                    alt="Charth"
+                    class="header-logo"
+                >
+            </a>
             <nav class="header-nav">
-                <a href="/admin/dashboard" class="nav-link active">Dashboard</a>
+                <a href="/admin/dashboard" class="nav-link active">Documentos</a>
                 <a href="/admin/logs" class="nav-link">Logs</a>
                 <form method="POST" action="/admin/logout" style="display:inline;">
-                    <button type="submit" class="btn btn-outline-sm">Sair (<%= adminUsername %>)</button>
+                    <button type="submit" class="btn-outline-sm">Sair</button>
                 </form>
             </nav>
         </div>
@@ -35,7 +42,7 @@
                 <% if (typeof uploadError !== 'undefined' && uploadError) { %>
                     <div class="alert alert-error"><%= uploadError %></div>
                 <% } %>
-                <form method="POST" action="/admin/documents/upload" enctype="multipart/form-data" class="upload-form">
+                <form method="POST" action="/admin/documents/upload" enctype="multipart/form-data">
                     <div class="form-row">
                         <div class="form-group flex-1">
                             <label for="title">Título do documento</label>
@@ -46,7 +53,7 @@
                             <input type="file" id="pdf" name="pdf" class="form-control" accept=".pdf" required>
                         </div>
                         <div class="form-group align-bottom">
-                            <button type="submit" class="btn btn-primary">Fazer Upload</button>
+                            <button type="submit" class="btn btn-primary">Upload</button>
                         </div>
                     </div>
                 </form>
