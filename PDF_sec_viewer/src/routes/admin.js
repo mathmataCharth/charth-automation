@@ -12,6 +12,59 @@ const { v4: uuidv4 } = require('uuid');
 const pdfParse = require('pdf-parse');
 
 /**
+ * Comprime um PDF com Ghostscript (preset /ebook: 150 DPI, JPEG médio).
+ * Reduz drasticamente o tamanho de PDFs com imagens não otimizadas.
+ * Se o gs não estiver instalado, falhar, ou produzir arquivo MAIOR,
+ * retorna silenciosamente mantendo o original.
+ *
+ * Preset /ebook é um bom balanço qualidade/tamanho para lookbooks.
+ * Alternativas: /screen (72 DPI, menor), /printer (300 DPI, maior).
+ */
+async function compressPdf(filePath) {
+    const tmpPath = filePath + '.compressed';
+    let originalSize;
+    try {
+        originalSize = fs.statSync(filePath).size;
+    } catch (e) {
+        return false;
+    }
+
+    try {
+        await execFileAsync('gs', [
+            '-sDEVICE=pdfwrite',
+            '-dCompatibilityLevel=1.5',
+            '-dPDFSETTINGS=/ebook',
+            '-dNOPAUSE',
+            '-dQUIET',
+            '-dBATCH',
+            '-dDetectDuplicateImages=true',
+            '-dCompressFonts=true',
+            '-r150',
+            `-sOutputFile=${tmpPath}`,
+            filePath
+        ], { timeout: 600000 }); // 10 min para PDFs grandes
+
+        // Verifica se o resultado faz sentido (não-vazio e menor que original)
+        if (!fs.existsSync(tmpPath)) return false;
+        const newSize = fs.statSync(tmpPath).size;
+
+        if (newSize === 0 || newSize >= originalSize) {
+            // Compressão não ajudou — descarta
+            try { fs.unlinkSync(tmpPath); } catch (e) {}
+            return false;
+        }
+
+        fs.renameSync(tmpPath, filePath);
+        console.log(`[COMPRESS] ${(originalSize/1024/1024).toFixed(1)} MB → ${(newSize/1024/1024).toFixed(1)} MB (${Math.round((1 - newSize/originalSize) * 100)}% menor)`);
+        return true;
+    } catch (err) {
+        try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) {}
+        console.warn('[COMPRESS] Falha ao comprimir PDF:', err.message);
+        return false;
+    }
+}
+
+/**
  * Lineariza um PDF (Fast Web View). Se o qpdf não estiver instalado
  * ou o arquivo não puder ser linearizado, retorna silenciosamente
  * mantendo o arquivo original.
@@ -183,7 +236,10 @@ router.post('/documents/upload', adminAuth, (req, res) => {
             // Non-fatal: page count unknown
         }
 
-        // Linearizar para Fast Web View (permite carregar primeira página rapidamente)
+        // Pipeline: comprimir (gs) → linearizar (qpdf)
+        // Ordem importa: gs muitas vezes "desfaz" a linearização, então
+        // rodamos gs primeiro e qpdf por último.
+        await compressPdf(filePath);
         await linearizePdf(filePath);
 
         // Re-ler tamanho após linearização (muda ligeiramente)
