@@ -4,9 +4,42 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const pdfParse = require('pdf-parse');
+
+/**
+ * Lineariza um PDF (Fast Web View). Se o qpdf não estiver instalado
+ * ou o arquivo não puder ser linearizado, retorna silenciosamente
+ * mantendo o arquivo original.
+ */
+async function linearizePdf(filePath) {
+    const tmpPath = filePath + '.linearized';
+    try {
+        await execFileAsync('qpdf', ['--linearize', filePath, tmpPath], { timeout: 120000 });
+        // Substitui o arquivo original pelo linearizado
+        fs.renameSync(tmpPath, filePath);
+        return true;
+    } catch (err) {
+        // qpdf pode retornar exit code 3 mesmo em sucesso (warnings)
+        // Se o arquivo de saída existe, o resultado é válido
+        if (fs.existsSync(tmpPath)) {
+            try {
+                const stat = fs.statSync(tmpPath);
+                if (stat.size > 0) {
+                    fs.renameSync(tmpPath, filePath);
+                    return true;
+                }
+            } catch (e) {}
+            try { fs.unlinkSync(tmpPath); } catch (e) {}
+        }
+        console.warn('[LINEARIZE] Falha ao linearizar PDF:', err.message);
+        return false;
+    }
+}
 
 const adminAuth = require('../middleware/adminAuth');
 const db = require('../config/database');
@@ -150,11 +183,20 @@ router.post('/documents/upload', adminAuth, (req, res) => {
             // Non-fatal: page count unknown
         }
 
+        // Linearizar para Fast Web View (permite carregar primeira página rapidamente)
+        await linearizePdf(filePath);
+
+        // Re-ler tamanho após linearização (muda ligeiramente)
+        let finalSize = req.file.size;
+        try {
+            finalSize = fs.statSync(filePath).size;
+        } catch (e) {}
+
         const docId = createDocument(
             title,
             req.file.originalname,
             req.file.filename,
-            req.file.size,
+            finalSize,
             pageCount
         );
 
