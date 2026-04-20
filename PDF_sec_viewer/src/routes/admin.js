@@ -236,27 +236,45 @@ router.post('/documents/upload', adminAuth, (req, res) => {
             // Non-fatal: page count unknown
         }
 
-        // Pipeline: comprimir (gs) → linearizar (qpdf)
-        // Ordem importa: gs muitas vezes "desfaz" a linearização, então
-        // rodamos gs primeiro e qpdf por último.
-        await compressPdf(filePath);
+        // Lineariza síncrono (rápido, ~5-30s mesmo em PDFs grandes)
+        // Garante que o PDF já fica utilizável imediatamente para o viewer.
         await linearizePdf(filePath);
 
-        // Re-ler tamanho após linearização (muda ligeiramente)
-        let finalSize = req.file.size;
-        try {
-            finalSize = fs.statSync(filePath).size;
-        } catch (e) {}
+        const initialSize = (() => {
+            try { return fs.statSync(filePath).size; } catch (e) { return req.file.size; }
+        })();
 
         const docId = createDocument(
             title,
             req.file.originalname,
             req.file.filename,
-            finalSize,
+            initialSize,
             pageCount
         );
 
-        return res.redirect(`/admin/documents/${docId}`);
+        // Responde já — o admin não precisa esperar a compressão.
+        res.redirect(`/admin/documents/${docId}`);
+
+        // Compressão pesada (gs) roda em background. Pode levar minutos
+        // em PDFs grandes. Quando terminar, re-lineariza (gs descomprime
+        // a estrutura) e atualiza file_size no banco.
+        setImmediate(async () => {
+            try {
+                console.log(`[BG] Iniciando compressão de ${req.file.filename}...`);
+                const ok = await compressPdf(filePath);
+                if (ok) {
+                    await linearizePdf(filePath);
+                    const newSize = fs.statSync(filePath).size;
+                    db.prepare('UPDATE documents SET file_size = ? WHERE id = ?').run(newSize, docId);
+                    console.log(`[BG] Compressão concluída: ${req.file.filename} (${(newSize/1024/1024).toFixed(1)} MB)`);
+                } else {
+                    console.log(`[BG] Compressão sem ganho: ${req.file.filename}`);
+                }
+            } catch (e) {
+                console.error('[BG] Erro na compressão de fundo:', e.message);
+            }
+        });
+        return;
     });
 });
 
