@@ -31,16 +31,33 @@ async function compressPdf(filePath) {
         await execFileAsync('gs', [
             '-sDEVICE=pdfwrite',
             '-dCompatibilityLevel=1.5',
-            '-dPDFSETTINGS=/ebook',
             '-dNOPAUSE',
             '-dQUIET',
             '-dBATCH',
             '-dDetectDuplicateImages=true',
             '-dCompressFonts=true',
-            '-r150',
+            '-dSubsetFonts=true',
+            '-dDownsampleColorImages=true',
+            '-dColorImageDownsampleType=/Bicubic',
+            '-dColorImageResolution=96',
+            '-dColorImageDownsampleThreshold=1.0',
+            '-dAutoFilterColorImages=false',
+            '-dColorImageFilter=/DCTEncode',
+            '-dDownsampleGrayImages=true',
+            '-dGrayImageDownsampleType=/Bicubic',
+            '-dGrayImageResolution=96',
+            '-dGrayImageDownsampleThreshold=1.0',
+            '-dAutoFilterGrayImages=false',
+            '-dGrayImageFilter=/DCTEncode',
+            '-dDownsampleMonoImages=true',
+            '-dMonoImageDownsampleType=/Subsample',
+            '-dMonoImageResolution=300',
+            '-dMonoImageDownsampleThreshold=1.0',
+            '-c', '<< /ColorACSImageDict << /QFactor 0.40 /Blend 1 /HSamples [1 1 1 1] /VSamples [1 1 1 1] >> >> setdistillerparams',
+            '-f',
             `-sOutputFile=${tmpPath}`,
             filePath
-        ], { timeout: 600000 });
+        ], { timeout: 1800000 });
 
         if (!fs.existsSync(tmpPath)) return { ok: false, originalSize, newSize: originalSize };
         const newSize = fs.statSync(tmpPath).size;
