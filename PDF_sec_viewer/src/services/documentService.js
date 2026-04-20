@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const db = require('../config/database');
 
 function getAllDocuments() {
@@ -31,7 +33,24 @@ function toggleDocument(id) {
 }
 
 function deleteDocument(id) {
-    db.prepare('UPDATE documents SET is_active = 0 WHERE id = ?').run(id);
+    const doc = db.prepare('SELECT stored_filename FROM documents WHERE id = ?').get(id);
+    if (!doc) return false;
+
+    // Apaga o arquivo físico (e qualquer .compressed/.linearized residual)
+    const uploadDir = path.resolve(process.env.UPLOAD_DIR || './uploads');
+    const baseFile = path.join(uploadDir, doc.stored_filename);
+    for (const suffix of ['', '.compressed', '.linearized']) {
+        const p = baseFile + suffix;
+        try {
+            if (fs.existsSync(p)) fs.unlinkSync(p);
+        } catch (e) {
+            console.warn(`[DELETE] Falha ao remover ${p}:`, e.message);
+        }
+    }
+
+    // Remove do banco — FK ON DELETE CASCADE limpa access_links e access_logs
+    db.prepare('DELETE FROM documents WHERE id = ?').run(id);
+    return true;
 }
 
 module.exports = {
