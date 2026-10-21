@@ -24,6 +24,7 @@ document.addEventListener('selectstart', function (e) { e.preventDefault(); retu
 // === PDF Viewer State ===
 const canvas = document.getElementById('pdf-canvas');
 const pdfUrl = canvas.dataset.url;
+const infoUrl = canvas.dataset.info;
 const totalPagesFromAttr = parseInt(canvas.dataset.pages, 10) || 1;
 
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -41,6 +42,58 @@ const renderCache = new Map(); // key = `${pageNum}:${scale}` → ImageBitmap
 
 // Cache de PDFPageProxy (páginas já buscadas do arquivo)
 const pageProxyCache = new Map();
+const blockDocuments = new Map();
+let documentParts = [];
+let prefetchGeneration = 0;
+const prefetches = new Set();
+
+function blockForPage(num) {
+    return documentParts.findIndex(function (part) { return num >= part.start && num <= part.end; });
+}
+
+async function withPage(num, callback) {
+    const index = blockForPage(num);
+    if (index < 0) throw new Error('Página indisponível.');
+    let entry = blockDocuments.get(index);
+    if (!entry) {
+        const task = pdfjsLib.getDocument({
+            url: documentParts[index].url,
+            disableStream: true,
+            disableAutoFetch: true,
+            rangeChunkSize: 262144
+        });
+        entry = { task, promise: task.promise, users: 0 };
+        blockDocuments.set(index, entry);
+        task.promise.catch(function () {
+            if (blockDocuments.get(index) === entry) blockDocuments.delete(index);
+        });
+    }
+    entry.users++;
+    // Move to the end for LRU eviction.
+    blockDocuments.delete(index);
+    blockDocuments.set(index, entry);
+    try {
+        const document = await entry.promise;
+        let page = pageProxyCache.get(num);
+        if (!page) {
+            page = await document.getPage(num - documentParts[index].start + 1);
+            pageProxyCache.set(num, page);
+        }
+        return await callback(page);
+    } finally {
+        entry.users--;
+        for (const [oldIndex, oldEntry] of blockDocuments) {
+            if (blockDocuments.size <= 3) break;
+            if (oldEntry.users) continue;
+            blockDocuments.delete(oldIndex);
+            const part = documentParts[oldIndex];
+            for (const page of pageProxyCache.keys()) {
+                if (page >= part.start && page <= part.end) pageProxyCache.delete(page);
+            }
+            oldEntry.task.destroy().catch(function () {});
+        }
+    }
+}
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -74,16 +127,6 @@ function updateToolbar() {
     zoomLabel.textContent = Math.round(currentScale * 100) + '%';
 }
 
-function getPageProxy(num) {
-    if (pageProxyCache.has(num)) {
-        return Promise.resolve(pageProxyCache.get(num));
-    }
-    return pdfDoc.getPage(num).then(function (page) {
-        pageProxyCache.set(num, page);
-        return page;
-    });
-}
-
 function cacheKey(num, scale) {
     return num + ':' + scale.toFixed(2);
 }
@@ -100,7 +143,8 @@ function pruneCache() {
 async function renderPage(num, isPrefetch) {
     if (!pdfDoc) return;
 
-    const key = cacheKey(num, currentScale);
+    const scale = currentScale;
+    const key = cacheKey(num, scale);
 
     // Se já temos no cache e não é prefetch, desenha direto
     if (renderCache.has(key) && !isPrefetch) {
@@ -112,6 +156,7 @@ async function renderPage(num, isPrefetch) {
         ctx.drawImage(bitmap, 0, 0);
         currentPage = num;
         updateToolbar();
+        loadingMsg.remove();
         // Atualiza LRU movendo para o fim
         renderCache.delete(key);
         renderCache.set(key, bitmap);
@@ -121,6 +166,8 @@ async function renderPage(num, isPrefetch) {
 
     if (!isPrefetch) {
         rendering = true;
+        loadingMsg.textContent = 'Carregando página...';
+        document.body.appendChild(loadingMsg);
         // Cancela render anterior se estiver em progresso
         if (currentRenderTask) {
             try { currentRenderTask.cancel(); } catch (e) {}
@@ -128,32 +175,49 @@ async function renderPage(num, isPrefetch) {
     }
 
     try {
-        const page = await getPageProxy(num);
-        const viewport = page.getViewport({ scale: currentScale * DPR });
+        const bitmap = await withPage(num, async function (page) {
+            const viewport = page.getViewport({ scale: scale * DPR });
 
-        // Render em canvas offscreen para permitir cache
-        const off = document.createElement('canvas');
-        off.width = viewport.width;
-        off.height = viewport.height;
-        const offCtx = off.getContext('2d', { alpha: false });
+            // Render em canvas offscreen para permitir cache
+            const off = document.createElement('canvas');
+            off.width = viewport.width;
+            off.height = viewport.height;
+            const offCtx = off.getContext('2d', { alpha: false });
 
-        const task = page.render({
-            canvasContext: offCtx,
-            viewport: viewport
+            const task = page.render({
+                canvasContext: offCtx,
+                viewport: viewport
+            });
+            if (!isPrefetch) currentRenderTask = task;
+
+            await task.promise;
+
+            // Transforma em ImageBitmap para guardar em cache (libera memória do canvas)
+            let bitmap;
+            try {
+                bitmap = await createImageBitmap(off);
+            } catch (e) {
+                // Fallback: se createImageBitmap falhar, usa o canvas direto
+                bitmap = off;
+            }
+
+            return bitmap;
         });
-        if (!isPrefetch) currentRenderTask = task;
 
-        await task.promise;
-
-        // Transforma em ImageBitmap para guardar em cache (libera memória do canvas)
-        let bitmap;
-        try {
-            bitmap = await createImageBitmap(off);
-        } catch (e) {
-            // Fallback: se createImageBitmap falhar, usa o canvas direto
-            bitmap = off;
+        // A zoom change may have happened while this page was rendering.
+        if (scale !== currentScale) {
+            if (bitmap.close) bitmap.close();
+            if (!isPrefetch) {
+                rendering = false;
+                currentRenderTask = null;
+                const pending = pageNumPending === null ? num : pageNumPending;
+                pageNumPending = null;
+                renderPage(pending);
+            }
+            return;
         }
-
+        const previous = renderCache.get(key);
+        if (previous && previous.close) previous.close();
         renderCache.set(key, bitmap);
         pruneCache();
 
@@ -165,6 +229,7 @@ async function renderPage(num, isPrefetch) {
             ctx.drawImage(bitmap, 0, 0);
             currentPage = num;
             updateToolbar();
+            loadingMsg.remove();
             rendering = false;
             currentRenderTask = null;
 
@@ -181,6 +246,9 @@ async function renderPage(num, isPrefetch) {
         if (!isPrefetch) {
             rendering = false;
             currentRenderTask = null;
+            loadingMsg.textContent = 'Erro ao carregar a página. Tente novamente ou recarregue.';
+            document.body.appendChild(loadingMsg);
+            pageNumPending = null;
             console.error('Render error:', err);
         }
     }
@@ -192,16 +260,21 @@ function schedulePrefetch(num) {
     const next = num + 1;
     if (next > pdfDoc.numPages) return;
     const key = cacheKey(next, currentScale);
-    if (renderCache.has(key)) return;
+    if (renderCache.has(key) || prefetches.has(key)) return;
+    const generation = ++prefetchGeneration;
 
     // Usa requestIdleCallback se disponível, senão setTimeout
     const schedule = window.requestIdleCallback || function (cb) { return setTimeout(cb, 100); };
-    schedule(function () {
-        renderPage(next, true);
+    schedule(async function () {
+        if (generation !== prefetchGeneration || rendering || renderCache.has(key) || prefetches.has(key)) return;
+        prefetches.add(key);
+        try { await renderPage(next, true); }
+        finally { prefetches.delete(key); }
     });
 }
 
 function queueRenderPage(num) {
+    prefetchGeneration++;
     if (rendering) {
         pageNumPending = num;
     } else {
@@ -224,31 +297,40 @@ function invalidateCacheOnScaleChange() {
 
 function fitToWindow() {
     if (!pdfDoc) return;
-    getPageProxy(currentPage).then(function (page) {
+    withPage(currentPage, function (page) {
         const container = document.getElementById('canvas-container');
         const containerWidth = container.clientWidth - 32;
         const naturalViewport = page.getViewport({ scale: 1 });
         currentScale = containerWidth / naturalViewport.width;
         invalidateCacheOnScaleChange();
         queueRenderPage(currentPage);
+    }).catch(function (error) {
+        console.error('Fit error:', error);
     });
 }
 
-// Load PDF (com range requests + streaming habilitados por padrão)
-const loadingTask = pdfjsLib.getDocument({
-    url: pdfUrl,
-    disableStream: true,     // NÃO baixa o arquivo todo via streaming na primeira req
-    disableAutoFetch: true,  // NÃO faz prefetch do resto em background
-    rangeChunkSize: 262144   // 256 KB por chunk
-});
+// Fetch only the page map, then open the first small PDF block.
+async function loadDocument() {
+    const response = await fetch(infoUrl, { credentials: 'same-origin', cache: 'no-store' });
+    if (!response.ok) throw new Error('Documento indisponível.');
+    const info = await response.json();
+    documentParts = info.parts || [{ start: 1, end: info.pageCount || totalPagesFromAttr, url: pdfUrl }];
+    // Legacy documents with unknown page counts still use their real PDF count.
+    if (!info.parts) {
+        const task = pdfjsLib.getDocument({ url: info.url || pdfUrl,
+            disableStream: true, disableAutoFetch: true, rangeChunkSize: 262144 });
+        blockDocuments.set(0, { task, promise: task.promise, users: 0 });
+        const pdf = await task.promise;
+        documentParts[0].end = pdf.numPages;
+        info.pageCount = pdf.numPages;
+    }
+    pdfDoc = { numPages: info.pageCount };
+    totalSpan.textContent = pdfDoc.numPages;
+    pageInput.max = pdfDoc.numPages;
+    await renderPage(1);
+}
 
-loadingTask.promise.then(function (pdf) {
-    pdfDoc = pdf;
-    totalSpan.textContent = pdf.numPages;
-    pageInput.max = pdf.numPages;
-    loadingMsg.remove();
-    renderPage(1);
-}).catch(function (err) {
+loadDocument().catch(function (err) {
     loadingMsg.textContent = 'Erro ao carregar o documento. Tente recarregar a página.';
     console.error('PDF load error:', err);
 });

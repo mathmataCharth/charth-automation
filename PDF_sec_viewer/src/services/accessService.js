@@ -53,11 +53,18 @@ function incrementViews(id) {
     db.prepare('UPDATE access_links SET views_count = views_count + 1 WHERE id = ?').run(id);
 }
 
+function reserveView(id) {
+    return db.prepare(`UPDATE access_links SET views_count = views_count + 1
+        WHERE id = ? AND (max_views IS NULL OR max_views = 0 OR views_count < max_views)`)
+        .run(id).changes === 1;
+}
+
 module.exports = {
     getLinksForDocument,
     getLinkByToken,
     createLink,
     toggleLink,
     deleteLink,
-    incrementViews
+    incrementViews,
+    reserveView
 };

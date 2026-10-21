@@ -4,122 +4,10 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const execFileAsync = promisify(execFile);
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const pdfParse = require('pdf-parse');
-
-/**
- * Comprime um PDF com Ghostscript (preset /ebook: 150 DPI, JPEG médio).
- * Reduz drasticamente o tamanho de PDFs com imagens não otimizadas.
- * Se o gs não estiver instalado, falhar, ou produzir arquivo MAIOR,
- * retorna silenciosamente mantendo o original.
- *
- * Preset /ebook é um bom balanço qualidade/tamanho para lookbooks.
- * Alternativas: /screen (72 DPI, menor), /printer (300 DPI, maior).
- */
-async function compressPdf(filePath) {
-    const tmpPath = filePath + '.compressed';
-    let originalSize;
-    try {
-        originalSize = fs.statSync(filePath).size;
-    } catch (e) {
-        return false;
-    }
-
-    try {
-        // Configuração agressiva para lookbook DIGITAL (visualização em tela):
-        // - 96 DPI para imagens coloridas/grayscale (suficiente para web/4K)
-        // - 300 DPI para imagens monocromáticas (mantém nitidez de texto)
-        // - JPEG quality 75 (excelente para web, perda visual quase nula)
-        // - DownsampleType bicúbico (melhor qualidade que average/subsample)
-        // Resultado típico: 70-85% de redução em PDFs com imagens 300 DPI.
-        await execFileAsync('gs', [
-            '-sDEVICE=pdfwrite',
-            '-dCompatibilityLevel=1.5',
-            '-dNOPAUSE',
-            '-dQUIET',
-            '-dBATCH',
-            '-dDetectDuplicateImages=true',
-            '-dCompressFonts=true',
-            '-dSubsetFonts=true',
-            // Imagens coloridas
-            '-dDownsampleColorImages=true',
-            '-dColorImageDownsampleType=/Bicubic',
-            '-dColorImageResolution=96',
-            '-dColorImageDownsampleThreshold=1.0',
-            '-dAutoFilterColorImages=false',
-            '-dColorImageFilter=/DCTEncode',
-            // Imagens em escala de cinza
-            '-dDownsampleGrayImages=true',
-            '-dGrayImageDownsampleType=/Bicubic',
-            '-dGrayImageResolution=96',
-            '-dGrayImageDownsampleThreshold=1.0',
-            '-dAutoFilterGrayImages=false',
-            '-dGrayImageFilter=/DCTEncode',
-            // Imagens monocromáticas (texto/line art) — mantém alta resolução
-            '-dDownsampleMonoImages=true',
-            '-dMonoImageDownsampleType=/Subsample',
-            '-dMonoImageResolution=300',
-            '-dMonoImageDownsampleThreshold=1.0',
-            // JPEG quality (0.0–1.0, onde 0.75 = qualidade ~75)
-            '-c', '<< /ColorACSImageDict << /QFactor 0.40 /Blend 1 /HSamples [1 1 1 1] /VSamples [1 1 1 1] >> >> setdistillerparams',
-            '-f',
-            `-sOutputFile=${tmpPath}`,
-            filePath
-        ], { timeout: 1800000 }); // 30 min para PDFs muito grandes
-
-        // Verifica se o resultado faz sentido (não-vazio e menor que original)
-        if (!fs.existsSync(tmpPath)) return false;
-        const newSize = fs.statSync(tmpPath).size;
-
-        if (newSize === 0 || newSize >= originalSize) {
-            // Compressão não ajudou — descarta
-            try { fs.unlinkSync(tmpPath); } catch (e) {}
-            return false;
-        }
-
-        fs.renameSync(tmpPath, filePath);
-        console.log(`[COMPRESS] ${(originalSize/1024/1024).toFixed(1)} MB → ${(newSize/1024/1024).toFixed(1)} MB (${Math.round((1 - newSize/originalSize) * 100)}% menor)`);
-        return true;
-    } catch (err) {
-        try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) {}
-        console.warn('[COMPRESS] Falha ao comprimir PDF:', err.message);
-        return false;
-    }
-}
-
-/**
- * Lineariza um PDF (Fast Web View). Se o qpdf não estiver instalado
- * ou o arquivo não puder ser linearizado, retorna silenciosamente
- * mantendo o arquivo original.
- */
-async function linearizePdf(filePath) {
-    const tmpPath = filePath + '.linearized';
-    try {
-        await execFileAsync('qpdf', ['--linearize', filePath, tmpPath], { timeout: 120000 });
-        // Substitui o arquivo original pelo linearizado
-        fs.renameSync(tmpPath, filePath);
-        return true;
-    } catch (err) {
-        // qpdf pode retornar exit code 3 mesmo em sucesso (warnings)
-        // Se o arquivo de saída existe, o resultado é válido
-        if (fs.existsSync(tmpPath)) {
-            try {
-                const stat = fs.statSync(tmpPath);
-                if (stat.size > 0) {
-                    fs.renameSync(tmpPath, filePath);
-                    return true;
-                }
-            } catch (e) {}
-            try { fs.unlinkSync(tmpPath); } catch (e) {}
-        }
-        console.warn('[LINEARIZE] Falha ao linearizar PDF:', err.message);
-        return false;
-    }
-}
+const { prepareParts } = require('../services/pdfPartsService');
 
 const adminAuth = require('../middleware/adminAuth');
 const db = require('../config/database');
@@ -263,42 +151,22 @@ router.post('/documents/upload', adminAuth, (req, res) => {
             // Non-fatal: page count unknown
         }
 
-        // Lineariza síncrono (rápido, ~5-30s mesmo em PDFs grandes)
-        // Garante que o PDF já fica utilizável imediatamente para o viewer.
-        await linearizePdf(filePath);
-
-        const initialSize = (() => {
-            try { return fs.statSync(filePath).size; } catch (e) { return req.file.size; }
-        })();
-
         const docId = createDocument(
             title,
             req.file.originalname,
             req.file.filename,
-            initialSize,
+            req.file.size,
             pageCount
         );
 
-        // Responde já — o admin não precisa esperar a compressão.
+        // Preserve the uploaded bytes. Only derived blocks are prepared.
         res.redirect(`/admin/documents/${docId}`);
-
-        // Compressão pesada (gs) roda em background. Pode levar minutos
-        // em PDFs grandes. Quando terminar, re-lineariza (gs descomprime
-        // a estrutura) e atualiza file_size no banco.
         setImmediate(async () => {
             try {
-                console.log(`[BG] Iniciando compressão de ${req.file.filename}...`);
-                const ok = await compressPdf(filePath);
-                if (ok) {
-                    await linearizePdf(filePath);
-                    const newSize = fs.statSync(filePath).size;
-                    db.prepare('UPDATE documents SET file_size = ? WHERE id = ?').run(newSize, docId);
-                    console.log(`[BG] Compressão concluída: ${req.file.filename} (${(newSize/1024/1024).toFixed(1)} MB)`);
-                } else {
-                    console.log(`[BG] Compressão sem ganho: ${req.file.filename}`);
-                }
+                await prepareParts(filePath);
+                console.log(`[BG] Blocos preparados: ${req.file.filename}`);
             } catch (e) {
-                console.error('[BG] Erro na compressão de fundo:', e.message);
+                console.error('[BG] Falha ao preparar blocos; original preservado:', e.message);
             }
         });
         return;

@@ -4,7 +4,9 @@
     "private": true,
     "scripts": {
         "start": "node server.js",
-        "dev": "node --watch server.js"
+        "dev": "node --watch server.js",
+        "test": "node --test",
+        "prepare:pdfs": "node scripts/prepare-parts.js"
     },
     "dependencies": {
         "express": "^4.21.0",

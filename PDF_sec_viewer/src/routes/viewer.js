@@ -9,6 +9,7 @@ const security = require('../middleware/security');
 const { getLinkByToken } = require('../services/accessService');
 const { comparePassword } = require('../utils/hash');
 const { log } = require('../services/logService');
+const { openView } = require('../services/viewerAccessService');
 
 // Rate limiter for password attempts
 const maxAttempts = parseInt(process.env.MAX_PASSWORD_ATTEMPTS || '5', 10);
@@ -172,6 +173,7 @@ router.post('/:token/auth', passwordRateLimit, async (req, res) => {
         req.session.viewerTokens = {};
     }
     req.session.viewerTokens[token] = true;
+    if (req.session.viewerOpenings) delete req.session.viewerOpenings[token];
 
     log(link.id, ip, ua, 'password_success', null);
 
@@ -186,6 +188,9 @@ router.get('/:token/view', viewerAuth, (req, res) => {
     if (!link) {
         return res.status(404).send('Documento não encontrado.');
     }
+
+    const error = openView(req, link);
+    if (error) return res.status(error.status).send(error.error);
 
     res.render('viewer/view', {
         title: link.document_title,

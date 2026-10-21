@@ -48,6 +48,16 @@ function deleteDocument(id) {
         }
     }
 
+    // Derived blocks live only beside this document, inside the upload directory.
+    const partsDir = path.resolve(baseFile + '.parts');
+    if (partsDir.startsWith(uploadDir + path.sep)) {
+        try {
+            fs.rmSync(partsDir, { recursive: true, force: true });
+        } catch (e) {
+            console.warn('[DELETE] Falha ao remover blocos:', e.message);
+        }
+    }
+
     // Remove do banco — FK ON DELETE CASCADE limpa access_links e access_logs
     db.prepare('DELETE FROM documents WHERE id = ?').run(id);
     return true;
