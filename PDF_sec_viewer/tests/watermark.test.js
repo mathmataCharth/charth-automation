@@ -9,6 +9,7 @@ const { execFileSync } = require('child_process');
 const express = require('express');
 const { PDFDocument, degrees, decodePDFRawStream } = require('pdf-lib');
 const { stampPdf, getMarkedPdf } = require('../src/services/watermarkService');
+const { formatVersionLabel } = require('../src/utils/accessCode');
 const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'watermark-pdf-'));
 const previousCwd = process.cwd();
 const previousUpload = process.env.UPLOAD_DIR;
@@ -80,8 +81,8 @@ after(async () => {
     fs.rmSync(folder, { recursive: true, force: true });
 });
 
-test('opaque codes appear twice on every page and preserve crop boxes and rotations', async () => {
-    const stamped = await PDFDocument.load(await stampPdf(bytes, '58391'));
+test('one opaque editorial version appears on each page, preserving crop boxes and rotations', async () => {
+    const stamped = await PDFDocument.load(await stampPdf(bytes, 'A001'));
     const original = await PDFDocument.load(bytes);
     assert.equal(stamped.getPageCount(), 4);
     for (let i = 0; i < 4; i++) {
@@ -89,25 +90,27 @@ test('opaque codes appear twice on every page and preserve crop boxes and rotati
         assert.deepEqual(page.getCropBox(), original.getPages()[i].getCropBox());
         assert.deepEqual(page.getRotation(), original.getPages()[i].getRotation());
         const content = pageText(stamped, page);
-        assert.equal((content.match(/<3538333931>/gi) || []).length, 2);
+        assert.equal((content.match(/<56657273e36f3a323032375f41303031>/gi) || []).length, 1);
+        assert.ok(!/\bre\b/.test(content), 'no background rectangle covers the photograph');
+        assert.match(content, /0 Tr/, 'text is filled in solid black');
         assert.ok(!/\/ca\s+0\./.test(content));
     }
     await assert.rejects(stampPdf(bytes, '1234'), /inválido/);
-    await assert.rejects(stampPdf(Buffer.from('not PDF'), '58391'));
+    await assert.rejects(stampPdf(Buffer.from('not PDF'), 'A001'));
     assert.deepEqual(fs.readFileSync(source), bytes);
 });
 
 test('cache is shared only for the same source and access code; concurrent requests reuse one result', { skip: !qpdfAvailable }, async () => {
     const cache = source + '.parts/cache-tests';
-    const [first, repeated] = await Promise.all([getMarkedPdf(source, '58391', cache), getMarkedPdf(source, '58391', cache)]);
+    const [first, repeated] = await Promise.all([getMarkedPdf(source, 'A001', cache), getMarkedPdf(source, 'A001', cache)]);
     assert.equal(first, repeated);
-    const other = await getMarkedPdf(source, '27864', cache);
+    const other = await getMarkedPdf(source, 'A002', cache);
     assert.notEqual(first, other);
     const firstPdf = await PDFDocument.load(fs.readFileSync(first));
     const otherPdf = await PDFDocument.load(fs.readFileSync(other));
-    assert.match(pageText(firstPdf, firstPdf.getPages()[0]), /<3538333931>/i);
-    assert.match(pageText(otherPdf, otherPdf.getPages()[0]), /<3237383634>/i);
-    assert.ok(!pageText(firstPdf, firstPdf.getPages()[0]).includes('<3237383634>'));
+    assert.match(pageText(firstPdf, firstPdf.getPages()[0]), /<56657273e36f3a323032375f41303031>/i);
+    assert.match(pageText(otherPdf, otherPdf.getPages()[0]), /<56657273e36f3a323032375f41303032>/i);
+    assert.ok(!/<56657273e36f3a323032375f41303032>/i.test(pageText(firstPdf, firstPdf.getPages()[0])));
     assert.deepEqual(fs.readFileSync(source), bytes);
 });
 
@@ -121,7 +124,7 @@ test('protected document API delivers each access code inside the PDF and suppor
         const body = Buffer.from(await response.arrayBuffer());
         assert.ok(!body.equals(bytes));
         const pdf = await PDFDocument.load(body);
-        const expected = Buffer.from(getLinkById(id).access_code).toString('hex');
+        const expected = Buffer.from(formatVersionLabel(getLinkById(id).version_code), 'latin1').toString('hex');
         assert.match(pageText(pdf, pdf.getPages()[0]), new RegExp('<' + expected + '>', 'i'));
         const range = await fetch(`${base}/api/pdf/${token}/document`, { headers: { 'x-test-viewer': '1', range: 'bytes=0-99' } });
         assert.equal(range.status, 206);
@@ -152,9 +155,9 @@ test('each PDF block is marked on the server for the requesting access', { skip:
             assert.equal(response.status, 200);
             const pdf = await PDFDocument.load(await response.arrayBuffer());
             assert.equal(pdf.getPageCount(), 2);
-            const expected = Buffer.from(getLinkById(id).access_code).toString('hex');
+            const expected = Buffer.from(formatVersionLabel(getLinkById(id).version_code), 'latin1').toString('hex');
             for (const page of pdf.getPages()) {
-                assert.equal((pageText(pdf, page).match(new RegExp('<' + expected + '>', 'gi')) || []).length, 2);
+                assert.equal((pageText(pdf, page).match(new RegExp('<' + expected + '>', 'gi')) || []).length, 1);
             }
         }
     }

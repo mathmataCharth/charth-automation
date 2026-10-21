@@ -127,13 +127,17 @@ O usuário admin é criado automaticamente no banco ao iniciar, com as credencia
 
 ### Código individual nas páginas
 
-Cada acesso recebe um código aleatório fixo de 5 dígitos, mostrado na coluna
-**Código** do painel. A atribuição também é feita aos acessos antigos, sem alterar
-links, senhas, limites ou contagens. Um registro de códigos reservados impede sua
-reutilização após a exclusão de acessos.
+Cada acesso recebe um código sequencial fixo (`A001`, `A002`, ...), mostrado como
+`2027_A001` na coluna **Versão** do painel. O ano é a identificação editorial da
+coleção, não o ano corrente. Após `A999`, a sequência continua em `A1000`.
+A atribuição também é feita aos acessos antigos, em ordem de criação, sem alterar
+links, senhas, limites ou contagens. A sequência é global e nunca reutiliza códigos
+de acessos excluídos. Os códigos numéricos anteriores ficam preservados no banco
+e aparecem como **Anterior** no painel para rastrear fotografias já compartilhadas.
 
-Todas as páginas servidas pela API recebem o número nos cantos superior direito e
-inferior esquerdo, em preto sobre fundo branco, com opacidade total. O código é
+Todas as páginas servidas pela API recebem `Versão:2027_A001` uma única vez no
+rodapé direito, em fonte pequena, preta e com opacidade total, sem retângulo de
+fundo. O código é
 inserido no PDF no servidor, inclusive nos blocos e na rota de documento completo.
 O original armazenado não é alterado; não há rasterização, redução de resolução
 ou recompressão das fotografias. A rotação e o recorte de cada página são mantidos.
@@ -152,8 +156,9 @@ O arquivo recém-gerado é preservado mesmo se sozinho exceder o limite configur
 Excluir o documento também remove esse cache. O navegador permanece sem cache
 persistente dos PDFs.
 
-A inicialização aplica uma migração aditiva e transacional: coluna `access_code`,
-índice único e tabela `access_code_registry`. Faça backup do banco antes de
+A inicialização aplica uma migração aditiva e transacional: coluna `version_code`,
+índice único e tabela `access_version_registry` com sequência persistente. A coluna
+legada `access_code` e seu registro são preservados. Faça backup do banco antes de
 publicar. Voltar ao código anterior não exige apagar as novas estruturas.
 
 ### Editar limites de acessos existentes

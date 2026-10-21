@@ -128,7 +128,7 @@
                                 <tr>
                                     <th>Destinatário</th>
                                     <th>E-mail</th>
-                                    <th>Código</th>
+                                    <th>Versão</th>
                                     <th>Link</th>
                                     <th>Views</th>
                                     <th>Expira em</th>
@@ -144,7 +144,12 @@
                                     <tr class="<%= link.is_active ? '' : 'row-inactive' %>">
                                         <td><strong><%= link.recipient_name %></strong></td>
                                         <td class="text-sm text-muted"><%= link.recipient_email || '—' %></td>
-                                        <td><strong class="access-code"><%= link.access_code %></strong></td>
+                                        <td class="text-sm">
+                                            <strong class="access-code">2027_<%= link.version_code %></strong>
+                                            <% if (link.access_code) { %>
+                                                <div class="text-muted">Anterior: <%= link.access_code %></div>
+                                            <% } %>
+                                        </td>
                                         <td class="text-sm">
                                             <span class="link-truncate" title="<%= linkUrl %>">
                                                 <%= link.token.slice(0, 12) %>...

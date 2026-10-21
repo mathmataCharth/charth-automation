@@ -48,7 +48,7 @@ function sendPdf(req, res, filePath) {
 async function sendAccessPdf(req, res, source) {
     try {
         const root = sourceFile(req.pdfLink) + '.parts/access-cache';
-        const file = await getMarkedPdf(source, req.pdfLink.access_code, root);
+        const file = await getMarkedPdf(source, req.pdfLink.version_code, root);
         // Recheck revocation/expiry after asynchronous preparation.
         const error = unavailable(getLinkByToken(req.params.token));
         if (error) return res.status(error.status).json({ error: error.error });

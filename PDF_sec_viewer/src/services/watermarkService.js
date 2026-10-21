@@ -6,18 +6,15 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState,
-    concatTransformationMatrix } = require('pdf-lib');
+    concatTransformationMatrix, setTextRenderingMode, TextRenderingMode } = require('pdf-lib');
+const { formatVersionLabel } = require('../utils/accessCode');
 const run = promisify(execFile);
 const pending = new Map();
 let queue = Promise.resolve();
-const STYLE = 'code-corners-opaque-v1';
-
-function validateCode(code) {
-    if (typeof code !== 'string' || !/^[1-9]\d{4}$/.test(code)) throw new Error('Código inválido.');
-}
+const STYLE = 'editorial-footer-2027-v3';
 
 async function stampPdf(input, code) {
-    validateCode(code);
+    const label = formatVersionLabel(code);
     const pdf = await PDFDocument.load(input, { updateMetadata: false });
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     for (const page of pdf.getPages()) {
@@ -32,21 +29,16 @@ async function stampPdf(input, code) {
         };
         const visibleWidth = rotation % 180 ? height : width;
         const visibleHeight = rotation % 180 ? width : height;
-        const size = Math.min(10.5, Math.min(visibleWidth, visibleHeight) / 18);
-        const padding = size * 0.35;
-        const boxWidth = font.widthOfTextAtSize(code, size) + padding * 2;
-        const boxHeight = size + padding * 2;
         const margin = Math.min(14, visibleWidth * 0.035, visibleHeight * 0.035);
-        page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...transforms[rotation]));
-        for (const [left, bottom] of [
-            [visibleWidth - margin - boxWidth, visibleHeight - margin - boxHeight], [margin, margin]
-        ]) {
-            page.drawRectangle({ x: left, y: bottom, width: boxWidth, height: boxHeight, color: rgb(1, 1, 1), opacity: 1 });
-            page.drawText(code, { x: left + padding, y: bottom + padding, size, font, color: rgb(0, 0, 0), opacity: 1 });
-        }
+        const size = Math.min(8, visibleHeight / 30,
+            (visibleWidth - 2 * margin) / font.widthOfTextAtSize(label, 1));
+        page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...transforms[rotation]),
+            setTextRenderingMode(TextRenderingMode.Fill));
+        page.drawText(label, { x: visibleWidth - margin - font.widthOfTextAtSize(label, size),
+            y: margin, size, font, color: rgb(0, 0, 0), opacity: 1 });
         page.pushOperators(popGraphicsState());
     }
-    // Existing image streams are copied as-is; only vector text/rectangles are added.
+    // Existing image streams are copied as-is; only vector text is added.
     return pdf.save({ useObjectStreams: true, addDefaultPage: false });
 }
 
@@ -77,10 +69,10 @@ async function pruneCache(root, keep) {
 }
 
 async function getMarkedPdf(source, code, cacheRoot) {
-    validateCode(code);
+    const label = formatVersionLabel(code);
     const stat = await fs.promises.stat(source);
     const key = crypto.createHash('sha256').update(JSON.stringify({ source: path.resolve(source),
-        size: stat.size, modified: stat.mtimeMs, code, style: STYLE })).digest('hex');
+        size: stat.size, modified: stat.mtimeMs, label, style: STYLE })).digest('hex');
     const output = path.join(cacheRoot, key + '.pdf');
     const cached = await fs.promises.stat(output).catch(() => null);
     if (cached && cached.size > 0) {

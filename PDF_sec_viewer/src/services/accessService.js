@@ -1,7 +1,7 @@
 'use strict';
 
 const db = require('../config/database');
-const { ensureAccessCode } = require('../utils/accessCode');
+const { ensureVersionCode } = require('../utils/accessCode');
 
 function getLinksForDocument(documentId) {
     return db.prepare(`
@@ -23,7 +23,7 @@ function getLinkByToken(token) {
         JOIN documents d ON d.id = al.document_id
         WHERE al.token = ?
     `).get(token);
-    if (link && !link.access_code) link.access_code = ensureAccessCode(db, link.id);
+    if (link && !link.version_code) link.version_code = ensureVersionCode(db, link.id);
     return link;
 }
 
@@ -42,7 +42,7 @@ function createLink(documentId, token, recipientName, recipientEmail, passwordHa
             maxViews || null,
             expiresAt || null
         );
-        ensureAccessCode(db, result.lastInsertRowid);
+        ensureVersionCode(db, result.lastInsertRowid);
         return result.lastInsertRowid;
     })();
 }

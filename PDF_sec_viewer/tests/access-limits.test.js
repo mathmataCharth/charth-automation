@@ -22,6 +22,7 @@ before(async () => {
     document = createDocument('Lookbook', 'original.pdf', 'original.pdf', 100, 228);
     link = createLink(document, 'existing-token', 'Customer', 'customer@example.com', 'unchanged-hash', 10, '2099-11-04 18:30:00');
     other = createLink(document, 'other-token', 'Other', '', 'other-hash', 8, null);
+    db.prepare('UPDATE access_links SET access_code = ? WHERE id = ?').run('58391', link);
     db.prepare('UPDATE access_links SET views_count = 5 WHERE id = ?').run(link);
     const app = express();
     app.use(express.urlencoded({ extended: false }));
@@ -81,6 +82,9 @@ test('document panel exposes edit controls with existing limits prefilled', asyn
     assert.ok(html.includes(`action="/admin/links/${link}/limits"`));
     assert.ok(html.includes('value="2099-11-04T15:30"'));
     assert.ok(html.includes('Já utilizadas: 5'));
+    assert.ok(html.includes('2027_A001'));
+    assert.ok(html.includes('2027_A002'));
+    assert.ok(html.includes('Anterior: 58391'));
 });
 
 test('editing requires admin authentication and unknown links return 404', async () => {
