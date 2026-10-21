@@ -135,9 +135,10 @@ links, senhas, limites ou contagens. A sequência é global e nunca reutiliza c�
 de acessos excluídos. Os códigos numéricos anteriores ficam preservados no banco
 e aparecem como **Anterior** no painel para rastrear fotografias já compartilhadas.
 
-Todas as páginas servidas pela API recebem `Versão:2027_A001` uma única vez no
-rodapé direito, em fonte pequena, preta e com opacidade total, sem retângulo de
-fundo. O código é
+Todas as páginas servidas pela API recebem `Versão:2027_A001` em três posições:
+topo central, lateral esquerda na vertical e região inferior direita (acima do
+rodapé). A fonte é pequena, na cor `#777777`, com opacidade total e sem retângulo
+de fundo. O código é
 inserido no PDF no servidor, inclusive nos blocos e na rota de documento completo.
 O original armazenado não é alterado; não há rasterização, redução de resolução
 ou recompressão das fotografias. A rotação e o recorte de cada página são mantidos.

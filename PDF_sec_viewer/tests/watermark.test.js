@@ -81,7 +81,7 @@ after(async () => {
     fs.rmSync(folder, { recursive: true, force: true });
 });
 
-test('one opaque editorial version appears on each page, preserving crop boxes and rotations', async () => {
+test('three opaque gray versions follow the requested positions on every page and rotation', async () => {
     const stamped = await PDFDocument.load(await stampPdf(bytes, 'A001'));
     const original = await PDFDocument.load(bytes);
     assert.equal(stamped.getPageCount(), 4);
@@ -90,9 +90,25 @@ test('one opaque editorial version appears on each page, preserving crop boxes a
         assert.deepEqual(page.getCropBox(), original.getPages()[i].getCropBox());
         assert.deepEqual(page.getRotation(), original.getPages()[i].getRotation());
         const content = pageText(stamped, page);
-        assert.equal((content.match(/<56657273e36f3a323032375f41303031>/gi) || []).length, 1);
+        assert.equal((content.match(/<56657273e36f3a323032375f41303031>/gi) || []).length, 3);
         assert.ok(!/\bre\b/.test(content), 'no background rectangle covers the photograph');
-        assert.match(content, /0 Tr/, 'text is filled in solid black');
+        assert.match(content, /0 Tr/, 'text uses a solid fill');
+        const gray = (content.match(/([\d.]+) ([\d.]+) ([\d.]+) rg/g) || []).filter(operation => {
+            const channels = operation.split(' ').slice(0, 3).map(Number);
+            return channels.every(channel => Math.abs(channel - 119 / 255) < 0.000001);
+        });
+        assert.equal(gray.length, 3, 'all three labels use #777777');
+        const matrices = [...content.matchAll(/([-\d.e]+) ([-\d.e]+) ([-\d.e]+) ([-\d.e]+) ([-\d.e]+) ([-\d.e]+) Tm/g)]
+            .slice(-3).map(match => match.slice(1).map(Number));
+        const crop = page.getCropBox();
+        const landscapeAxes = page.getRotation().angle % 180 === 0;
+        const w = landscapeAxes ? crop.width : crop.height;
+        const h = landscapeAxes ? crop.height : crop.width;
+        assert.equal(matrices.length, 3);
+        assert.ok(matrices[0][4] > w * 0.35 && matrices[0][4] < w * 0.6 && matrices[0][5] > h * 0.96, 'top center');
+        assert.ok(matrices[1][4] < w * 0.08 && matrices[1][5] > h * 0.3 && matrices[1][5] < h * 0.6, 'left center');
+        assert.ok(Math.abs(matrices[1][1] - 1) < 0.000001 && Math.abs(matrices[1][2] + 1) < 0.000001, 'left label reads vertically');
+        assert.ok(matrices[2][4] > w * 0.8 && matrices[2][5] > h * 0.1 && matrices[2][5] < h * 0.16, 'lower right, above the former footer');
         assert.ok(!/\/ca\s+0\./.test(content));
     }
     await assert.rejects(stampPdf(bytes, '1234'), /inválido/);
@@ -157,7 +173,7 @@ test('each PDF block is marked on the server for the requesting access', { skip:
             assert.equal(pdf.getPageCount(), 2);
             const expected = Buffer.from(formatVersionLabel(getLinkById(id).version_code), 'latin1').toString('hex');
             for (const page of pdf.getPages()) {
-                assert.equal((pageText(pdf, page).match(new RegExp('<' + expected + '>', 'gi')) || []).length, 1);
+                assert.equal((pageText(pdf, page).match(new RegExp('<' + expected + '>', 'gi')) || []).length, 3);
             }
         }
     }
