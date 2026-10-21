@@ -128,6 +128,7 @@
                                 <tr>
                                     <th>Destinatário</th>
                                     <th>E-mail</th>
+                                    <th>Código</th>
                                     <th>Link</th>
                                     <th>Views</th>
                                     <th>Expira em</th>
@@ -143,6 +144,7 @@
                                     <tr class="<%= link.is_active ? '' : 'row-inactive' %>">
                                         <td><strong><%= link.recipient_name %></strong></td>
                                         <td class="text-sm text-muted"><%= link.recipient_email || '—' %></td>
+                                        <td><strong class="access-code"><%= link.access_code %></strong></td>
                                         <td class="text-sm">
                                             <span class="link-truncate" title="<%= linkUrl %>">
                                                 <%= link.token.slice(0, 12) %>...
@@ -185,7 +187,7 @@
                                         </td>
                                     </tr>
                                     <tr id="edit-link-<%= link.id %>" class="link-edit-row" <%= editing ? '' : 'hidden' %>>
-                                        <td colspan="8">
+                                        <td colspan="9">
                                             <form method="POST" action="/admin/links/<%= link.id %>/limits" class="edit-link-form">
                                                 <p><strong>Editar acesso de <%= link.recipient_name %></strong></p>
                                                 <% if (editing) { %>

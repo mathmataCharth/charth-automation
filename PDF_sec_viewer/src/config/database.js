@@ -60,4 +60,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
 );
 `);
 
+// Add identifiers to existing installations without changing tokens or passwords.
+require('../utils/accessCode').migrateAccessCodes(db);
+
 module.exports = db;

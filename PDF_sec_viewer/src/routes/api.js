@@ -6,6 +6,9 @@ const path = require('path');
 const security = require('../middleware/security');
 const { authorizePdf } = require('../services/viewerAccessService');
 const { readManifest } = require('../services/pdfPartsService');
+const { getMarkedPdf } = require('../services/watermarkService');
+const { getLinkByToken } = require('../services/accessService');
+const { unavailable } = require('../services/viewerAccessService');
 
 router.use(security);
 
@@ -42,8 +45,23 @@ function sendPdf(req, res, filePath) {
     });
 }
 
+async function sendAccessPdf(req, res, source) {
+    try {
+        const root = sourceFile(req.pdfLink) + '.parts/access-cache';
+        const file = await getMarkedPdf(source, req.pdfLink.access_code, root);
+        // Recheck revocation/expiry after asynchronous preparation.
+        const error = unavailable(getLinkByToken(req.params.token));
+        if (error) return res.status(error.status).json({ error: error.error });
+        return sendPdf(req, res, file);
+    } catch (error) {
+        console.error('[ACCESS PDF]', error.message);
+        const missingSource = error.code === 'ENOENT' && error.path === source;
+        return res.status(missingSource ? 404 : 503).json({ error: 'Não foi possível preparar o documento. Tente novamente.' });
+    }
+}
+
 router.get('/pdf/:token/document', authorizePdf, (req, res) => {
-    sendPdf(req, res, sourceFile(req.pdfLink));
+    return sendAccessPdf(req, res, sourceFile(req.pdfLink));
 });
 
 router.get('/pdf/:token/parts/:version/:index', authorizePdf, (req, res) => {
@@ -54,7 +72,7 @@ router.get('/pdf/:token/parts/:version/:index', authorizePdf, (req, res) => {
         !Number.isSafeInteger(index) || index < 0 || index >= manifest.parts.length) {
         return res.status(404).json({ error: 'Bloco não encontrado.' });
     }
-    sendPdf(req, res, path.join(file + '.parts', manifest.version, `${index}.pdf`));
+    return sendAccessPdf(req, res, path.join(file + '.parts', manifest.version, `${index}.pdf`));
 });
 
 module.exports = router;

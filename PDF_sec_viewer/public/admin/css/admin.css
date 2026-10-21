@@ -96,6 +96,7 @@
 
 /* Filter form */
 .link-edit-row[hidden] { display: none; }
+.access-code { font-variant-numeric: tabular-nums; letter-spacing: 1px; }
 .link-edit-row > td { background: var(--charth-offwhite); padding: 20px; }
 .edit-link-form .form-row { flex-wrap: wrap; margin-top: 12px; }
 .edit-link-form .align-bottom { display: flex; flex-direction: row; gap: 8px; }

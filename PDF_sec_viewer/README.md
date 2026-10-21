@@ -125,6 +125,37 @@ O usuário admin é criado automaticamente no banco ao iniciar, com as credencia
 
 ## Instalação e execução
 
+### Código individual nas páginas
+
+Cada acesso recebe um código aleatório fixo de 5 dígitos, mostrado na coluna
+**Código** do painel. A atribuição também é feita aos acessos antigos, sem alterar
+links, senhas, limites ou contagens. Um registro de códigos reservados impede sua
+reutilização após a exclusão de acessos.
+
+Todas as páginas servidas pela API recebem o número nos cantos superior direito e
+inferior esquerdo, em preto sobre fundo branco, com opacidade total. O código é
+inserido no PDF no servidor, inclusive nos blocos e na rota de documento completo.
+O original armazenado não é alterado; não há rasterização, redução de resolução
+ou recompressão das fotografias. A rotação e o recorte de cada página são mantidos.
+
+Esta função requer as dependências do `package-lock.json` e o executável `qpdf`.
+Após gerar o PDF identificado, `qpdf` o lineariza mantendo os streams das imagens.
+Falhas de preparação retornam erro; a API nunca usa o original sem código como
+alternativa. A autorização e a expiração são verificadas novamente após a geração.
+
+Os PDFs identificados ficam em `<arquivo>.pdf.parts/access-cache/`, com chave que
+inclui versão do arquivo, código e estilo. Requisições simultâneas do mesmo acesso
+reutilizam a mesma geração; trabalhos diferentes são serializados para limitar
+memória. O cache por documento é limitado por `ACCESS_PDF_CACHE_MB` (padrão 1024 MB)
+e `ACCESS_PDF_CACHE_HOURS` (6 horas sem uso), com limpeza após novas gerações.
+O arquivo recém-gerado é preservado mesmo se sozinho exceder o limite configurado.
+Excluir o documento também remove esse cache. O navegador permanece sem cache
+persistente dos PDFs.
+
+A inicialização aplica uma migração aditiva e transacional: coluna `access_code`,
+índice único e tabela `access_code_registry`. Faça backup do banco antes de
+publicar. Voltar ao código anterior não exige apagar as novas estruturas.
+
 ### Editar limites de acessos existentes
 
 Na página do documento, use **Editar limites** na lista **Acessos Criados**.

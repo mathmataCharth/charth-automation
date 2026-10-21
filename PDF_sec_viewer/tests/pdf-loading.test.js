@@ -47,7 +47,13 @@ before(async () => {
         res.end('ok');
     });
     app.use('/v', require('../src/routes/viewer'));
+    // These transport tests isolate range handling from PDF generation. The
+    // watermark suite exercises the real generator and protected API together.
+    const watermarks = require('../src/services/watermarkService');
+    const realMarkedPdf = watermarks.getMarkedPdf;
+    watermarks.getMarkedPdf = async source => source;
     app.use('/api', require('../src/routes/api'));
+    watermarks.getMarkedPdf = realMarkedPdf;
     const partsService = require('../src/services/pdfPartsService');
     const realPrepare = partsService.prepareParts;
     partsService.prepareParts = async (file) => { preparedUploads.push(file); };

@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../config/database');
+const { ensureAccessCode } = require('../utils/accessCode');
 
 function getLinksForDocument(documentId) {
     return db.prepare(`
@@ -11,7 +12,7 @@ function getLinksForDocument(documentId) {
 }
 
 function getLinkByToken(token) {
-    return db.prepare(`
+    const link = db.prepare(`
         SELECT
             al.*,
             d.title AS document_title,
@@ -22,23 +23,28 @@ function getLinkByToken(token) {
         JOIN documents d ON d.id = al.document_id
         WHERE al.token = ?
     `).get(token);
+    if (link && !link.access_code) link.access_code = ensureAccessCode(db, link.id);
+    return link;
 }
 
 function createLink(documentId, token, recipientName, recipientEmail, passwordHash, maxViews, expiresAt) {
-    const result = db.prepare(`
-        INSERT INTO access_links
-            (document_id, token, recipient_name, recipient_email, password_hash, max_views, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-        documentId,
-        token,
-        recipientName,
-        recipientEmail || null,
-        passwordHash,
-        maxViews || null,
-        expiresAt || null
-    );
-    return result.lastInsertRowid;
+    return db.transaction(() => {
+        const result = db.prepare(`
+            INSERT INTO access_links
+                (document_id, token, recipient_name, recipient_email, password_hash, max_views, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            documentId,
+            token,
+            recipientName,
+            recipientEmail || null,
+            passwordHash,
+            maxViews || null,
+            expiresAt || null
+        );
+        ensureAccessCode(db, result.lastInsertRowid);
+        return result.lastInsertRowid;
+    })();
 }
 
 function toggleLink(id) {
