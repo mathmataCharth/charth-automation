@@ -85,6 +85,8 @@ test('document panel exposes edit controls with existing limits prefilled', asyn
     assert.ok(html.includes('2027_A001'));
     assert.ok(html.includes('2027_A002'));
     assert.ok(html.includes('Anterior: 58391'));
+    assert.ok(html.includes(`href="/admin/links/${link}/preview"`));
+    assert.ok(html.includes('Testar imagens'));
 });
 
 test('editing requires admin authentication and unknown links return 404', async () => {

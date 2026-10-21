@@ -125,6 +125,42 @@ O usuário admin é criado automaticamente no banco ao iniciar, com as credencia
 
 ## Instalação e execução
 
+### Teste interno de visualização por imagens
+
+Na lista de acessos do documento, **Testar imagens** abre uma tela restrita ao
+administrador, com as opções **Imagens** e **PDF**. Ambos usam o código individual
+do acesso escolhido. A comparação não altera senhas, limites, status, visualizações
+ou logs das clientes; o visualizador público continua usando o PDF existente.
+A prévia administrativa também permite inspecionar acessos vencidos ou desativados.
+
+O piloto converte cada página solicitada com `qpdf` e `pdftoppm`, conserva seu recorte
+e rotação, e usa WebP **sem perdas** para armazenar a imagem renderizada. O PDF
+original permanece intacto. A visualização usa até 1800 px no lado maior; ao ampliar
+acima de 125%, solicita uma imagem independente de até 4800 px para conferir detalhes.
+Rasterização tem resolução finita: avalie as peças no zoom antes de adotar o formato.
+
+As três identificações `Versão:2027_A001`, em `#777777`, são gravadas nos pixels no
+servidor. Bases sem código são privadas e não têm rota de entrega. Cada requisição
+de imagem ou PDF da prévia exige sessão de administrador, e as respostas usam
+`private, no-store`. Uma falha de conversão retorna erro, sem expor a base ou o original.
+
+Neste piloto, a conversão ocorre na primeira solicitação de cada página/resolução.
+O rodapé diferencia a preparação inicial do arquivo pronto no servidor. Use
+**Repetir teste** para medir com o arquivo preparado; os tempos incluem obtenção e
+exibição na tela, e a primeira página inclui a inicialização do visualizador.
+A tela antecipa só uma página vizinha, mantém no máximo três blobs e carrega a
+resolução maior apenas sob demanda. Não conclua o ganho em rede móvel a partir de
+tempos locais de conversão. Preparação automática de todo o documento no upload
+fica para a adoção do formato, após a avaliação do piloto.
+
+Dependências: `npm ci` (inclui `sharp` fixado no lockfile) e, no Ubuntu,
+`apt-get install --no-install-recommends poppler-utils fontconfig`.
+`PDFTOPPM_BIN` e `QPDF_BIN` permitem configurar os executáveis.
+Os derivados ficam em `<arquivo>.pdf.parts/image-preview/`, com cache por documento
+limitado por `IMAGE_PREVIEW_CACHE_MB` (1024 MB por padrão). Conversões de imagens têm
+fila própria limitada e processamento serial, separados da geração dos PDFs públicos.
+Excluir o documento remove também suas imagens de teste.
+
 ### Código individual nas páginas
 
 Cada acesso recebe um código sequencial fixo (`A001`, `A002`, ...), mostrado como

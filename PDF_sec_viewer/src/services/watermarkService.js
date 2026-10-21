@@ -8,6 +8,7 @@ const { promisify } = require('util');
 const { PDFDocument, StandardFonts, rgb, degrees, pushGraphicsState, popGraphicsState,
     concatTransformationMatrix, setTextRenderingMode, TextRenderingMode } = require('pdf-lib');
 const { formatVersionLabel } = require('../utils/accessCode');
+const { versionLayout } = require('../utils/versionLayout');
 const run = promisify(execFile);
 const pending = new Map();
 let queue = Promise.resolve();
@@ -29,17 +30,9 @@ async function stampPdf(input, code) {
         };
         const visibleWidth = rotation % 180 ? height : width;
         const visibleHeight = rotation % 180 ? width : height;
-        const margin = Math.min(14, visibleWidth * 0.035, visibleHeight * 0.035);
-        const size = Math.min(8, visibleHeight / 30,
-            (visibleWidth - 2 * margin) / font.widthOfTextAtSize(label, 1));
-        const textWidth = font.widthOfTextAtSize(label, size);
+        const { size, positions } = versionLayout(visibleWidth, visibleHeight, code, font);
         page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...transforms[rotation]),
             setTextRenderingMode(TextRenderingMode.Fill));
-        const positions = [
-            { x: (visibleWidth - textWidth) / 2, y: visibleHeight - Math.min(10, visibleHeight * 0.025), angle: 0 },
-            { x: visibleWidth * 0.055, y: (visibleHeight - textWidth) / 2, angle: 90 },
-            { x: visibleWidth - margin - textWidth, y: visibleHeight * 0.125, angle: 0 }
-        ];
         for (const position of positions) {
             page.drawText(label, { x: position.x, y: position.y, rotate: degrees(position.angle),
                 size, font, color: rgb(119 / 255, 119 / 255, 119 / 255), opacity: 1 });

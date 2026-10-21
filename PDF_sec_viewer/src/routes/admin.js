@@ -311,4 +311,6 @@ router.get('/logs', adminAuth, (req, res) => {
     });
 });
 
+router.use('/links/:id/preview', require('./preview'));
+
 module.exports = router;

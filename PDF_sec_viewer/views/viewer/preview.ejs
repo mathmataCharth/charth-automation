@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de visualização | <%= doc.title %></title>
+    <link rel="stylesheet" href="/public/admin/css/image-preview.css">
+    <script src="/public/admin/js/image-preview.js" defer></script>
+</head>
+<body>
+    <header class="test-header">
+        <div class="test-heading">
+            <a class="back" href="/admin/documents/<%= doc.id %>#access-links">&#8592; Voltar ao painel</a>
+            <strong class="brand">CHARTH</strong>
+            <span class="test-badge">Teste interno</span>
+        </div>
+        <div class="test-description">
+            <h1><%= doc.title %></h1>
+            <p><%= link.recipient_name %> · Versão:2027_<%= link.version_code %> · Não consome visualizações</p>
+            <p>Na primeira visita, as imagens são preparadas. Use “Repetir teste” para comparar com as páginas já prontas.</p>
+        </div>
+        <nav class="test-tools" aria-label="Controles de visualização">
+            <div class="mode-switch" aria-label="Formato">
+                <a id="mode-images" href="<%= prefix %>" class="<%= mode === 'images' ? 'selected' : '' %>" aria-current="<%= mode === 'images' ? 'page' : 'false' %>">Imagens</a>
+                <a id="mode-pdf" href="<%= prefix %>?mode=pdf" class="<%= mode === 'pdf' ? 'selected' : '' %>" aria-current="<%= mode === 'pdf' ? 'page' : 'false' %>">PDF</a>
+            </div>
+            <div class="page-controls">
+                <button id="previous" aria-label="Página anterior" disabled>&#8592;</button>
+                <label for="page-number" class="sr-only">Página</label>
+                <input id="page-number" type="number" min="1" value="<%= initialPage %>" inputmode="numeric">
+                <span>/ <span id="page-total"><%= doc.page_count || '…' %></span></span>
+                <button id="next" aria-label="Próxima página" disabled>&#8594;</button>
+            </div>
+            <div class="zoom-controls">
+                <button id="zoom-out" aria-label="Reduzir zoom">−</button>
+                <span id="zoom-value">100%</span>
+                <button id="zoom-in" aria-label="Aumentar zoom">+</button>
+                <button id="fit">Ajustar</button>
+            </div>
+            <button id="repeat">Repetir teste</button>
+        </nav>
+    </header>
+    <main id="preview" data-prefix="<%= prefix %>" data-mode="<%= mode %>" data-page="<%= initialPage %>" aria-label="Prévia do lookbook">
+        <div id="message" role="status" aria-live="polite">Carregando página…</div>
+        <img id="page-image" class="page-surface" alt="Página do lookbook" draggable="false" hidden>
+        <canvas id="page-canvas" class="page-surface" hidden aria-label="Página do lookbook em PDF"></canvas>
+        <button id="retry" hidden>Tentar novamente</button>
+    </main>
+    <footer class="test-metrics" aria-live="polite">
+        <span>Primeira exibição: <strong id="first-time">—</strong></span>
+        <span>Esta página: <strong id="page-time">—</strong></span>
+        <span id="asset-details">Preparando teste</span>
+        <span id="cache-details"></span>
+    </footer>
+</body>
+</html>
