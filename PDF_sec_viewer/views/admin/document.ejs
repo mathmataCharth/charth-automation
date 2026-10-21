@@ -99,7 +99,7 @@
                             <input type="number" id="max_views" name="max_views" class="form-control" min="1" placeholder="Ilimitado">
                         </div>
                         <div class="form-group">
-                            <label for="expires_at">Expira em</label>
+                            <label for="expires_at">Expira em (Brasília)</label>
                             <input type="datetime-local" id="expires_at" name="expires_at" class="form-control">
                         </div>
                         <div class="form-group align-bottom">
@@ -111,11 +111,14 @@
         </div>
 
         <!-- Links Table -->
-        <div class="card">
+        <div class="card" id="access-links">
             <div class="card-header">
                 <h3>Acessos Criados (<%= links.length %>)</h3>
             </div>
             <div class="card-body p-0">
+                <% if (typeof linkUpdated !== 'undefined' && linkUpdated) { %>
+                    <div class="alert alert-success" role="status">Limites do acesso atualizados.</div>
+                <% } %>
                 <% if (links.length === 0) { %>
                     <p class="empty-state">Nenhum acesso criado ainda.</p>
                 <% } else { %>
@@ -136,6 +139,7 @@
                             <tbody>
                                 <% links.forEach(link => { %>
                                     <% const linkUrl = baseUrl + '/v/' + link.token; %>
+                                    <% const editing = typeof editError !== 'undefined' && editError.id === link.id; %>
                                     <tr class="<%= link.is_active ? '' : 'row-inactive' %>">
                                         <td><strong><%= link.recipient_name %></strong></td>
                                         <td class="text-sm text-muted"><%= link.recipient_email || '—' %></td>
@@ -154,7 +158,8 @@
                                         </td>
                                         <td class="text-sm">
                                             <% if (link.expires_at) { %>
-                                                <%= link.expires_at.slice(0, 16).replace('T', ' ') %>
+                                                <%= expiryInput(link.expires_at).replace('T', ' ') %>
+                                                <span class="text-muted">(Brasília)</span>
                                             <% } else { %>—<% } %>
                                         </td>
                                         <td>
@@ -166,6 +171,9 @@
                                         </td>
                                         <td class="text-sm"><%= link.created_at.slice(0, 16).replace('T', ' ') %></td>
                                         <td class="actions-cell">
+                                            <button type="button" class="btn btn-xs btn-secondary edit-link-btn"
+                                                data-target="edit-link-<%= link.id %>" aria-controls="edit-link-<%= link.id %>"
+                                                aria-expanded="<%= editing ? 'true' : 'false' %>">Editar limites</button>
                                             <form method="POST" action="/admin/links/<%= link.id %>/toggle" style="display:inline;">
                                                 <button type="submit" class="btn btn-xs <%= link.is_active ? 'btn-warning' : 'btn-success' %>">
                                                     <%= link.is_active ? 'Desativar' : 'Ativar' %>
@@ -173,6 +181,37 @@
                                             </form>
                                             <form method="POST" action="/admin/links/<%= link.id %>/delete" style="display:inline;" class="confirm-delete" data-message="Remover este acesso permanentemente?">
                                                 <button type="submit" class="btn btn-xs btn-danger">Remover</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    <tr id="edit-link-<%= link.id %>" class="link-edit-row" <%= editing ? '' : 'hidden' %>>
+                                        <td colspan="8">
+                                            <form method="POST" action="/admin/links/<%= link.id %>/limits" class="edit-link-form">
+                                                <p><strong>Editar acesso de <%= link.recipient_name %></strong></p>
+                                                <% if (editing) { %>
+                                                    <div class="alert alert-error" role="alert"><%= editError.message %></div>
+                                                <% } %>
+                                                <div class="form-row">
+                                                    <div class="form-group">
+                                                        <label for="edit-max-<%= link.id %>">Máx. visualizações</label>
+                                                        <input type="number" id="edit-max-<%= link.id %>" name="max_views"
+                                                            class="form-control" min="1" step="1" placeholder="Ilimitado"
+                                                            value="<%= editing ? editValues.max_views : (link.max_views || '') %>">
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label for="edit-expires-<%= link.id %>">Expira em (Brasília)</label>
+                                                        <input type="datetime-local" id="edit-expires-<%= link.id %>" name="expires_at"
+                                                            class="form-control"
+                                                            value="<%= editing ? editValues.expires_at : expiryInput(link.expires_at) %>">
+                                                    </div>
+                                                    <div class="form-group align-bottom">
+                                                        <button type="submit" class="btn btn-primary">Salvar alterações</button>
+                                                        <button type="button" class="btn btn-secondary cancel-edit-link"
+                                                            data-target="edit-link-<%= link.id %>">Cancelar</button>
+                                                    </div>
+                                                </div>
+                                                <p class="text-sm text-muted">Já utilizadas: <%= link.views_count %>. O limite é o total, incluindo as visualizações já realizadas.
+                                                    Deixe os campos vazios para remover o limite ou a expiração. O link e a senha permanecem os mesmos.</p>
                                             </form>
                                         </td>
                                     </tr>

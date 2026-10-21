@@ -10,6 +10,7 @@ const { getLinkByToken } = require('../services/accessService');
 const { comparePassword } = require('../utils/hash');
 const { log } = require('../services/logService');
 const { openView } = require('../services/viewerAccessService');
+const { isExpired } = require('../utils/accessLimits');
 
 // Rate limiter for password attempts
 const maxAttempts = parseInt(process.env.MAX_PASSWORD_ATTEMPTS || '5', 10);
@@ -62,7 +63,7 @@ router.get('/:token', (req, res) => {
     }
 
     // Check expiration
-    if (link.expires_at && new Date(link.expires_at) < new Date()) {
+    if (isExpired(link.expires_at)) {
         return res.render('viewer/password', {
             title: link.document_title,
             token,
@@ -136,7 +137,7 @@ router.post('/:token/auth', passwordRateLimit, async (req, res) => {
         });
     }
 
-    if (link.expires_at && new Date(link.expires_at) < new Date()) {
+    if (isExpired(link.expires_at)) {
         return res.render('viewer/password', {
             title: link.document_title,
             token,

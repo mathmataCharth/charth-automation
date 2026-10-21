@@ -2,12 +2,13 @@
 
 const { getLinkByToken, reserveView } = require('./accessService');
 const { log } = require('./logService');
+const { isExpired } = require('../utils/accessLimits');
 
 function unavailable(link) {
     if (!link) return { status: 404, error: 'Link não encontrado.' };
     if (!link.is_active) return { status: 403, error: 'Link desativado.' };
     if (!link.document_is_active) return { status: 403, error: 'Documento indisponível.' };
-    if (link.expires_at && new Date(link.expires_at) <= new Date()) {
+    if (isExpired(link.expires_at)) {
         return { status: 403, error: 'Link expirado.' };
     }
     return null;

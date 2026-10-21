@@ -45,6 +45,15 @@ function toggleLink(id) {
     db.prepare('UPDATE access_links SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?').run(id);
 }
 
+function getLinkById(id) {
+    return db.prepare('SELECT * FROM access_links WHERE id = ?').get(id);
+}
+
+function updateLinkLimits(id, maxViews, expiresAt) {
+    return db.prepare('UPDATE access_links SET max_views = ?, expires_at = ? WHERE id = ?')
+        .run(maxViews, expiresAt, id).changes === 1;
+}
+
 function deleteLink(id) {
     db.transaction(() => {
         db.prepare('DELETE FROM access_logs WHERE access_link_id = ?').run(id);
@@ -67,6 +76,8 @@ module.exports = {
     getLinkByToken,
     createLink,
     toggleLink,
+    getLinkById,
+    updateLinkLimits,
     deleteLink,
     incrementViews,
     reserveView

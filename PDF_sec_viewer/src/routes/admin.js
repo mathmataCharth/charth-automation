@@ -14,7 +14,13 @@ const db = require('../config/database');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { generateToken } = require('../utils/token');
 const { getAllDocuments, getDocumentById, createDocument, toggleDocument, deleteDocument } = require('../services/documentService');
-const { getLinksForDocument, createLink, toggleLink, deleteLink } = require('../services/accessService');
+const { getLinksForDocument, createLink, toggleLink, deleteLink, getLinkById, updateLinkLimits } = require('../services/accessService');
+const { parseAccessLimits, expiryInput } = require('../utils/accessLimits');
+
+router.use((req, res, next) => {
+    res.locals.expiryInput = expiryInput;
+    next();
+});
 
 // Multer storage configuration
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || './uploads');
@@ -181,7 +187,8 @@ router.get('/documents/:id', adminAuth, (req, res) => {
     }
     const links = getLinksForDocument(doc.id);
     const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-    res.render('admin/document', { doc, links, baseUrl, adminUsername: req.session.adminUsername });
+    const linkUpdated = links.some(link => String(link.id) === req.query.updated);
+    res.render('admin/document', { doc, links, baseUrl, linkUpdated, adminUsername: req.session.adminUsername });
 });
 
 // POST /admin/documents/:id/toggle
@@ -233,12 +240,48 @@ router.post('/documents/:id/links', adminAuth, async (req, res) => {
     const token = generateToken();
     const passwordHash = await hashPassword(password);
 
-    const maxViewsInt = max_views ? parseInt(max_views, 10) : null;
-    const expiresAtStr = expires_at ? expires_at.replace('T', ' ') : null;
+    let limits;
+    try {
+        limits = parseAccessLimits({ max_views, expires_at });
+    } catch (error) {
+        return res.status(400).render('admin/document', {
+            doc, links: getLinksForDocument(docId),
+            baseUrl: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+            adminUsername: req.session.adminUsername, linkError: error.message
+        });
+    }
 
-    createLink(docId, token, recipient_name.trim(), recipient_email || null, passwordHash, maxViewsInt, expiresAtStr);
+    createLink(docId, token, recipient_name.trim(), recipient_email || null, passwordHash, limits.maxViews, limits.expiresAt);
 
     return res.redirect(`/admin/documents/${docId}`);
+});
+
+// POST /admin/links/:id/limits
+router.post('/links/:id/limits', adminAuth, (req, res) => {
+    const link = getLinkById(req.params.id);
+    if (!link) return res.status(404).send('Acesso não encontrado.');
+    const values = req.body || {};
+    let limits;
+    try {
+        limits = parseAccessLimits(values);
+    } catch (error) {
+        const doc = getDocumentById(link.document_id);
+        if (!doc) return res.status(404).send('Documento não encontrado.');
+        return res.status(400).render('admin/document', {
+            doc, links: getLinksForDocument(doc.id),
+            baseUrl: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+            adminUsername: req.session.adminUsername,
+            editError: { id: link.id, message: error.message },
+            editValues: {
+                max_views: typeof values.max_views === 'string' ? values.max_views : '',
+                expires_at: typeof values.expires_at === 'string' ? values.expires_at : ''
+            }
+        });
+    }
+    if (!updateLinkLimits(link.id, limits.maxViews, limits.expiresAt)) {
+        return res.status(404).send('Acesso não encontrado.');
+    }
+    return res.redirect(`/admin/documents/${link.document_id}?updated=${link.id}#access-links`);
 });
 
 // POST /admin/links/:id/toggle

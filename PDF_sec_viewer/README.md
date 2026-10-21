@@ -125,6 +125,24 @@ O usuário admin é criado automaticamente no banco ao iniciar, com as credencia
 
 ## Instalação e execução
 
+### Editar limites de acessos existentes
+
+Na página do documento, use **Editar limites** na lista **Acessos Criados**.
+Altere a quantidade máxima de visualizações e/ou a data e hora de expiração e
+clique em **Salvar alterações**. Campos vazios removem o respectivo limite.
+
+O limite de visualizações é o total permitido, incluindo as já utilizadas:
+um acesso com 5 visualizações que passa a ter limite 20 permite mais 15 aberturas.
+Editar os limites preserva a URL, a senha, o destinatário, o histórico e o status
+ativo/inativo. Aumentar os limites permite reutilizar um acesso vencido ou esgotado;
+um acesso desativado continua exigindo o botão **Ativar**.
+
+Datas são informadas e exibidas no horário de Brasília (`America/Sao_Paulo`) e
+salvas com fuso explícito. Valores antigos sem fuso são interpretados como UTC,
+conforme o servidor em produção, preservando o instante de expiração existente.
+A rota `POST /admin/links/:id/limits` exige autenticação administrativa e valida os
+campos no servidor. Esta melhoria não requer migração do banco.
+
 ### Carregamento progressivo por blocos
 
 O visualizador mantém um único link, senha e numeração de páginas. PDFs preparados

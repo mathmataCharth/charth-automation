@@ -1,6 +1,22 @@
 'use strict';
 
 (function () {
+    document.querySelectorAll('.edit-link-btn, .cancel-edit-link').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const row = document.getElementById(button.dataset.target);
+            if (!row) return;
+            const opening = button.classList.contains('edit-link-btn') && row.hidden;
+            row.hidden = !opening;
+            const trigger = document.querySelector('.edit-link-btn[aria-controls="' + row.id + '"]');
+            if (trigger) trigger.setAttribute('aria-expanded', String(opening));
+            if (opening) row.querySelector('input').focus();
+            else {
+                row.querySelector('form').reset();
+                if (trigger) trigger.focus();
+            }
+        });
+    });
+
     // Copy link buttons
     document.querySelectorAll('.copy-link-btn').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
