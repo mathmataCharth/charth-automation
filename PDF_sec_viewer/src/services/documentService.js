@@ -36,9 +36,22 @@ function deleteDocument(id) {
     const doc = db.prepare('SELECT stored_filename FROM documents WHERE id = ?').get(id);
     if (!doc) return false;
 
-    // Apaga o arquivo físico (e qualquer .compressed/.linearized residual)
     const uploadDir = path.resolve(process.env.UPLOAD_DIR || './uploads');
-    const baseFile = path.join(uploadDir, doc.stored_filename);
+    const baseFile = path.resolve(uploadDir, doc.stored_filename);
+    if (!baseFile.startsWith(uploadDir + path.sep)) {
+        throw new Error('Caminho de documento inválido.');
+    }
+
+    // Older databases have NO ACTION foreign keys. Remove children explicitly,
+    // in a single transaction, before touching any of the physical files.
+    db.transaction(() => {
+        db.prepare(`DELETE FROM access_logs WHERE access_link_id IN
+            (SELECT id FROM access_links WHERE document_id = ?)`).run(id);
+        db.prepare('DELETE FROM access_links WHERE document_id = ?').run(id);
+        db.prepare('DELETE FROM documents WHERE id = ?').run(id);
+    })();
+
+    // Remove the original and any derived files only after the transaction commits.
     for (const suffix of ['', '.compressed', '.linearized']) {
         const p = baseFile + suffix;
         try {
@@ -58,8 +71,6 @@ function deleteDocument(id) {
         }
     }
 
-    // Remove do banco — FK ON DELETE CASCADE limpa access_links e access_logs
-    db.prepare('DELETE FROM documents WHERE id = ?').run(id);
     return true;
 }
 

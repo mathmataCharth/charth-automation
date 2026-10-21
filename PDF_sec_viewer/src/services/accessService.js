@@ -46,7 +46,10 @@ function toggleLink(id) {
 }
 
 function deleteLink(id) {
-    db.prepare('DELETE FROM access_links WHERE id = ?').run(id);
+    db.transaction(() => {
+        db.prepare('DELETE FROM access_logs WHERE access_link_id = ?').run(id);
+        db.prepare('DELETE FROM access_links WHERE id = ?').run(id);
+    })();
 }
 
 function incrementViews(id) {
