@@ -6,6 +6,7 @@
     function label(job) {
         if (!job) return 'Aguardando preparação';
         if (job.status === 'ready') return 'Imagens prontas';
+        if (job.status === 'paused') return 'Aguardando reativação';
         if (job.status === 'failed') return 'Preparação interrompida';
         return 'Preparando: ' + Math.floor(job.completed / job.total * 100) + '%';
     }

@@ -124,8 +124,11 @@ test('public access stays in PDF until every page and resolution is ready', asyn
 });
 
 test('the real background pipeline prepares both resolutions and changes the existing link to images', { skip: !available }, async () => {
-    for (let n = 0; n < 6; n++) assert.equal(await jobs.runNext(), true);
+    for (let n = 0; n < 6 && await jobs.runNext(); n++) {}
     assert.equal(row().status, 'ready');
+    const bases = jobs.statusForDocument(documentId).find(job => job.linkId === null);
+    assert.equal(bases.status, 'ready');
+    assert.equal(bases.completed, bases.total);
     assert.equal(await jobs.runNext(), false);
     assert.ok(await jobs.readyForLink(getLinkById(linkId), { stored_filename: 'lookbook.pdf', page_count: 1 }));
     assert.deepEqual(fs.readFileSync(source), bytes);
@@ -206,6 +209,9 @@ test('a changed source invalidates readiness and restarts the durable preparatio
     assert.equal(row().status, 'queued');
     assert.equal(row().completed, 0);
     assert.deepEqual(getLinkById(linkId), before);
+    db.prepare('UPDATE access_links SET is_active=0 WHERE id=?').run(linkId);
+    assert.equal(jobs.statusForDocument(documentId).find(job => job.linkId === linkId).status, 'paused');
+    db.prepare('UPDATE access_links SET is_active=1 WHERE id=?').run(linkId);
 });
 
 test('deleting links and documents also removes their durable jobs', () => {

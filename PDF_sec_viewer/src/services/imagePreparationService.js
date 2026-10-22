@@ -47,8 +47,10 @@ async function reconcile() {
 }
 
 function statusForDocument(id) {
-    return db.prepare(`SELECT access_link_id AS linkId,status,completed,total,error
-        FROM image_preparations WHERE document_id=? ORDER BY id`).all(id).map(row => ({ ...row,
+    return db.prepare(`SELECT j.access_link_id AS linkId,
+        CASE WHEN j.status<>'ready' AND (d.is_active=0 OR al.is_active=0) THEN 'paused' ELSE j.status END AS status,
+        j.completed,j.total,j.error FROM image_preparations j JOIN documents d ON d.id=j.document_id
+        LEFT JOIN access_links al ON al.id=j.access_link_id WHERE j.document_id=? ORDER BY j.id`).all(id).map(row => ({ ...row,
         error: row.error ? 'A preparação foi interrompida. Tente novamente ou verifique o espaço disponível.' : null }));
 }
 
@@ -105,6 +107,13 @@ async function runNext({ renderBase = prepareBaseImage, renderMarked = getMarked
         // Pin the shared bases and marked assets before any cache pruning can run.
         await renderBase(source, page, profile, job.version, info.pageCount);
         if (job.access_link_id) {
+            // Access preparation also builds the shared bases. Reflect that work
+            // in the document progress and avoid scheduling the same base scan again.
+            db.prepare(`UPDATE image_preparations SET completed=MAX(completed,?),
+                status=CASE WHEN MAX(completed,?)>=total THEN 'ready' ELSE 'queued' END,
+                attempts=0,retry_at=0,lease_until=0,error=NULL,updated_at=?
+                WHERE document_id=? AND access_link_id IS NULL AND version=?`)
+                .run(index + 1, index + 1, Date.now(), job.document_id, job.version);
             const image = await renderMarked(source, job.version_code, page, profile, job.version, info.pageCount);
             await upload({ documentId: job.document_id, linkId: job.access_link_id, version: job.version, page, profile, file: image.file });
         }
