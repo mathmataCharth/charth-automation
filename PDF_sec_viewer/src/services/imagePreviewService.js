@@ -58,6 +58,8 @@ async function isFile(file) {
 }
 
 async function prune(root, keep) {
+    // Prepared documents are durable assets, not an evictable request cache.
+    if (await isFile(path.join(root, '.prepared'))) return;
     const configured = Number(process.env.IMAGE_PREVIEW_CACHE_MB);
     const max = (Number.isFinite(configured) && configured > 0 ? configured : 1024) * 1024 * 1024;
     const entries = [];
@@ -123,6 +125,43 @@ async function versionSvg(metadata, code) {
         `<g transform="scale(${sx} ${sy})" fill="#777777" font-family="Arial, Helvetica, sans-serif" font-size="${layout.size}">${text}</g></svg>`);
 }
 
+function imagePaths(source, info, code, page, profile) {
+    if (!Number.isSafeInteger(page) || page < 1 || !Object.hasOwn(PROFILES, profile)) throw inputError('Página ou resolução inválida.');
+    if (page > info.pageCount) throw inputError('Página não encontrada.', 404);
+    const root = source + '.parts/image-preview';
+    const baseKey = digest({ version: info.version, page, profile });
+    return { root, base: path.join(root, baseKey + '.png'),
+        file: code ? path.join(root, digest({ baseKey, code, style: STYLE }) + '.webp') : null };
+}
+
+async function getReadyImage(source, code, page, profile, expectedVersion, pageCount) {
+    formatVersionLabel(code);
+    const info = await getPreviewInfo(source, pageCount);
+    if (expectedVersion !== info.version) throw inputError('Documento atualizado. Reabra o lookbook.', 409);
+    const { file } = imagePaths(source, info, code, page, profile);
+    if (!await isFile(file)) throw inputError('Esta imagem ainda está sendo preparada.', 503);
+    return { file, cacheHit: true, preparationMs: 0 };
+}
+
+async function prepareBaseImage(source, page, profile, expectedVersion, pageCount) {
+    const info = await getPreviewInfo(source, pageCount);
+    if (expectedVersion !== info.version) throw inputError('Documento atualizado.', 409);
+    const { root, base } = imagePaths(source, info, null, page, profile);
+    return enqueue(base, async () => {
+        await fs.promises.mkdir(root, { recursive: true, mode: 0o700 });
+        await fs.promises.writeFile(path.join(root, '.prepared'), 'durable\n', { mode: 0o600 });
+        if (await readBase(base)) return { file: base };
+        const temporary = await fs.promises.mkdtemp(path.join(root, 'working-'));
+        try {
+            await renderBase(source, page, profile, base, temporary);
+            if ((await getPreviewInfo(source, pageCount)).version !== info.version) throw inputError('Documento atualizado.', 409);
+            return { file: base };
+        } finally {
+            if (path.resolve(temporary).startsWith(path.resolve(root) + path.sep)) await fs.promises.rm(temporary, { recursive: true, force: true });
+        }
+    });
+}
+
 async function getMarkedImage(source, code, page, profile, expectedVersion, pageCount) {
     formatVersionLabel(code);
     if (!Number.isSafeInteger(page) || page < 1 || !Object.hasOwn(PROFILES, profile)) throw inputError('Página ou resolução inválida.');
@@ -163,4 +202,4 @@ async function getMarkedImage(source, code, page, profile, expectedVersion, page
     });
 }
 
-module.exports = { getPreviewInfo, getMarkedImage, PROFILES };
+module.exports = { getPreviewInfo, getMarkedImage, getReadyImage, prepareBaseImage, PROFILES };

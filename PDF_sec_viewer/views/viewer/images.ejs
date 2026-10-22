@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> | CHARTH</title>
+    <link rel="stylesheet" href="/public/admin/css/image-preview.css">
+    <script src="/public/admin/js/image-preview.js" defer></script>
+</head>
+<body>
+    <header class="test-header">
+        <div class="test-heading"><strong class="brand">CHARTH</strong><span><%= title %></span></div>
+        <nav class="test-tools" aria-label="Controles de visualização">
+            <div class="page-controls">
+                <button id="previous" aria-label="Página anterior" disabled>&#8592;</button>
+                <label for="page-number" class="sr-only">Página</label>
+                <input id="page-number" type="number" min="1" value="1" inputmode="numeric">
+                <span>/ <span id="page-total"><%= pageCount %></span></span>
+                <button id="next" aria-label="Próxima página" disabled>&#8594;</button>
+            </div>
+            <div class="zoom-controls">
+                <button id="zoom-out" aria-label="Reduzir zoom">−</button>
+                <span id="zoom-value">100%</span>
+                <button id="zoom-in" aria-label="Aumentar zoom">+</button>
+                <button id="fit">Ajustar</button>
+            </div>
+        </nav>
+    </header>
+    <main id="preview" data-prefix="/api/images/<%= token %>" data-mode="images" data-page="1" data-customer="true" aria-label="Lookbook">
+        <div id="message" role="status" aria-live="polite">Carregando página…</div>
+        <img id="page-image" class="page-surface" alt="Página do lookbook" draggable="false" hidden>
+        <canvas id="page-canvas" hidden></canvas>
+        <button id="retry" hidden>Tentar novamente</button>
+    </main>
+    <div hidden aria-hidden="true">
+        <a id="mode-images"></a><a id="mode-pdf"></a><button id="repeat"></button>
+        <span id="first-time"></span><span id="page-time"></span><span id="asset-details"></span><span id="cache-details"></span>
+    </div>
+</body>
+</html>

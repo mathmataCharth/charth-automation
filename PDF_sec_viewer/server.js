@@ -109,6 +109,7 @@ seedAdmin().then(() => {
     app.listen(PORT, () => {
         console.log(`[SERVER] DocSecureView rodando em http://localhost:${PORT}`);
         console.log(`[SERVER] Ambiente: ${process.env.NODE_ENV || 'development'}`);
+        require('./src/services/imageWorkerProcess').startImageWorker();
     });
 }).catch((err) => {
     console.error('[FATAL] Falha ao iniciar servidor:', err);

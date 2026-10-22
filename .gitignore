@@ -4,3 +4,5 @@ uploads/
 .env
 charth-automation/
 tmp/
+.wrangler/
+PDF_sec_viewer/cloudflare/wrangler.toml

@@ -16,6 +16,7 @@ const { generateToken } = require('../utils/token');
 const { getAllDocuments, getDocumentById, createDocument, toggleDocument, deleteDocument } = require('../services/documentService');
 const { getLinksForDocument, createLink, toggleLink, deleteLink, getLinkById, updateLinkLimits } = require('../services/accessService');
 const { parseAccessLimits, expiryInput } = require('../utils/accessLimits');
+const { scheduleDocument, statusForDocument } = require('../services/imagePreparationService');
 
 router.use((req, res, next) => {
     res.locals.expiryInput = expiryInput;
@@ -168,6 +169,8 @@ router.post('/documents/upload', adminAuth, (req, res) => {
         // Preserve the uploaded bytes. Only derived blocks are prepared.
         res.redirect(`/admin/documents/${docId}`);
         setImmediate(async () => {
+            try { await scheduleDocument(docId); }
+            catch (e) { console.error('[BG] Falha ao agendar imagens:', e.code || 'error'); }
             try {
                 await prepareParts(filePath);
                 console.log(`[BG] Blocos preparados: ${req.file.filename}`);
@@ -189,6 +192,20 @@ router.get('/documents/:id', adminAuth, (req, res) => {
     const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
     const linkUpdated = links.some(link => String(link.id) === req.query.updated);
     res.render('admin/document', { doc, links, baseUrl, linkUpdated, adminUsername: req.session.adminUsername });
+});
+
+router.get('/documents/:id/images/status', adminAuth, (req, res) => {
+    if (!getDocumentById(req.params.id)) return res.status(404).end();
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json({ jobs: statusForDocument(req.params.id) });
+});
+
+router.post('/documents/:id/images/prepare', adminAuth, async (req, res) => {
+    try {
+        if (!getDocumentById(req.params.id)) return res.status(404).send('Documento não encontrado.');
+        await scheduleDocument(req.params.id, { retry: true });
+        return res.redirect(`/admin/documents/${req.params.id}`);
+    } catch (_) { return res.status(503).send('Não foi possível iniciar a preparação.'); }
 });
 
 // POST /admin/documents/:id/toggle
@@ -252,8 +269,19 @@ router.post('/documents/:id/links', adminAuth, async (req, res) => {
     }
 
     createLink(docId, token, recipient_name.trim(), recipient_email || null, passwordHash, limits.maxViews, limits.expiresAt);
+    scheduleDocument(docId).catch(error => console.error('[IMAGES] Falha ao agendar acesso:', error.code || 'error'));
 
     return res.redirect(`/admin/documents/${docId}`);
+});
+
+router.post('/links/:id/images/prepare', adminAuth, async (req, res) => {
+    const link = getLinkById(req.params.id);
+    if (!link) return res.status(404).send('Acesso não encontrado.');
+    try {
+        await scheduleDocument(link.document_id, { retry: true });
+        require('../services/imagePreparationService').prioritizeLink(link.id);
+        return res.redirect(`/admin/documents/${link.document_id}#access-links`);
+    } catch (_) { return res.status(503).send('Não foi possível priorizar a preparação.'); }
 });
 
 // POST /admin/links/:id/limits

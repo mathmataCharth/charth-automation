@@ -45,6 +45,7 @@ function deleteDocument(id) {
     // Older databases have NO ACTION foreign keys. Remove children explicitly,
     // in a single transaction, before touching any of the physical files.
     db.transaction(() => {
+        db.prepare('DELETE FROM image_preparations WHERE document_id = ?').run(id);
         db.prepare(`DELETE FROM access_logs WHERE access_link_id IN
             (SELECT id FROM access_links WHERE document_id = ?)`).run(id);
         db.prepare('DELETE FROM access_links WHERE document_id = ?').run(id);

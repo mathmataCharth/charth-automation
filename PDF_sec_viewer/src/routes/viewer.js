@@ -11,6 +11,7 @@ const { comparePassword } = require('../utils/hash');
 const { log } = require('../services/logService');
 const { openView } = require('../services/viewerAccessService');
 const { isExpired } = require('../utils/accessLimits');
+const { readyForLink } = require('../services/imagePreparationService');
 
 // Rate limiter for password attempts
 const maxAttempts = parseInt(process.env.MAX_PASSWORD_ATTEMPTS || '5', 10);
@@ -182,7 +183,7 @@ router.post('/:token/auth', passwordRateLimit, async (req, res) => {
 });
 
 // GET /v/:token/view - Render the viewer
-router.get('/:token/view', viewerAuth, (req, res) => {
+router.get('/:token/view', viewerAuth, async (req, res) => {
     const { token } = req.params;
     const link = getLinkByToken(token);
 
@@ -192,6 +193,12 @@ router.get('/:token/view', viewerAuth, (req, res) => {
 
     const error = openView(req, link);
     if (error) return res.status(error.status).send(error.error);
+
+    try {
+        if (process.env.IMAGE_VIEWER_ENABLED !== 'false' && await readyForLink(link, link)) {
+            return res.render('viewer/images', { title: link.document_title, token, pageCount: link.page_count });
+        }
+    } catch (error) { console.warn('[IMAGE VIEWER] PDF disponível durante a preparação:', error.code || 'error'); }
 
     res.render('viewer/view', {
         title: link.document_title,

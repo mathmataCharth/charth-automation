@@ -69,6 +69,17 @@
             </div>
         </div>
 
+        <div class="card mb-24" data-image-status="/admin/documents/<%= doc.id %>/images/status">
+            <div class="card-header"><h3>Preparação das imagens</h3></div>
+            <div class="card-body">
+                <p id="image-preparation-summary" role="status">Consultando preparação…</p>
+                <p class="text-sm text-muted">Os acessos passam a usar imagens quando todas as páginas e o zoom estiverem prontos. Durante a preparação, continuam disponíveis em PDF.</p>
+                <form method="POST" action="/admin/documents/<%= doc.id %>/images/prepare">
+                    <button type="submit" class="btn btn-sm btn-secondary">Retomar preparação</button>
+                </form>
+            </div>
+        </div>
+
         <!-- Create New Link -->
         <div class="card mb-24">
             <div class="card-header">
@@ -179,6 +190,10 @@
                                         <td class="text-sm"><%= link.created_at.slice(0, 16).replace('T', ' ') %></td>
                                         <td class="actions-cell">
                                             <a class="btn btn-xs btn-secondary" href="/admin/links/<%= link.id %>/preview">Testar imagens</a>
+                                            <span class="text-sm text-muted image-link-status" data-link-id="<%= link.id %>"></span>
+                                            <form method="POST" action="/admin/links/<%= link.id %>/images/prepare" style="display:inline;">
+                                                <button type="submit" class="btn btn-xs btn-secondary">Priorizar imagens</button>
+                                            </form>
                                             <button type="button" class="btn btn-xs btn-secondary edit-link-btn"
                                                 data-target="edit-link-<%= link.id %>" aria-controls="edit-link-<%= link.id %>"
                                                 aria-expanded="<%= editing ? 'true' : 'false' %>">Editar limites</button>
@@ -235,5 +250,6 @@
     <div id="toast" class="toast hidden">Link copiado!</div>
 
     <script src="/public/admin/js/admin.js"></script>
+    <script src="/public/admin/js/image-preparation.js"></script>
 </body>
 </html>

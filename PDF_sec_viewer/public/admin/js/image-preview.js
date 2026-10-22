@@ -68,7 +68,7 @@
             await decoded.decode();
             if (entry.controller.signal.aborted) throw new Error('Carregamento cancelado.');
             Object.assign(entry, { width: decoded.naturalWidth, height: decoded.naturalHeight, size: blob.size,
-                cacheHit: response.headers.get('X-Preview-Cache') === 'HIT',
+                cacheHit: response.headers.get('X-Preview-Cache') === 'HIT' || response.headers.get('X-Media-Delivery') === 'cloudflare',
                 preparation: Number((response.headers.get('Server-Timing') || '').match(/prepare;dur=([\d.]+)/)?.[1] || 0) });
             return entry;
         })().catch(error => {
@@ -204,7 +204,7 @@
     async function start() {
         try {
             const response = await fetch(prefix + (mode === 'pdf' ? '/pdf/info' : '/info'), { credentials: 'same-origin', cache: 'no-store' });
-            if (!response.ok) throw new Error(response.status === 401 ? 'Entre novamente no painel para testar.' : 'Documento indisponível.');
+            if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão terminou. Abra novamente o link de acesso.' : 'Documento indisponível.');
             info = await response.json();
             await show(target, 0);
         } catch (error) {

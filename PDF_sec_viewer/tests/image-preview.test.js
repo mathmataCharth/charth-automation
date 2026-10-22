@@ -198,7 +198,7 @@ test('PDF comparison delivers the same individual code through admin-only routes
     assert.deepEqual(getLinkById(accessId), before);
 });
 
-test('converter failure never serves an unmarked image or the original PDF', real, async () => {
+test('an unprepared page never serves an unmarked image or the original PDF', real, async () => {
     const previous = process.env.PDFTOPPM_BIN;
     process.env.PDFTOPPM_BIN = path.join(folder, 'missing-renderer');
     try {

@@ -130,7 +130,8 @@ O usuário admin é criado automaticamente no banco ao iniciar, com as credencia
 Na lista de acessos do documento, **Testar imagens** abre uma tela restrita ao
 administrador, com as opções **Imagens** e **PDF**. Ambos usam o código individual
 do acesso escolhido. A comparação não altera senhas, limites, status, visualizações
-ou logs das clientes; o visualizador público continua usando o PDF existente.
+ou logs das clientes. Os links públicos usam imagens automaticamente depois de
+todas as páginas e resoluções daquele acesso estarem prontas; até lá, usam o PDF.
 A prévia administrativa também permite inspecionar acessos vencidos ou desativados.
 
 O piloto converte cada página solicitada com `qpdf` e `pdftoppm`, conserva seu recorte
@@ -144,22 +145,58 @@ servidor. Bases sem código são privadas e não têm rota de entrega. Cada requ
 de imagem ou PDF da prévia exige sessão de administrador, e as respostas usam
 `private, no-store`. Uma falha de conversão retorna erro, sem expor a base ou o original.
 
-Neste piloto, a conversão ocorre na primeira solicitação de cada página/resolução.
-O rodapé diferencia a preparação inicial do arquivo pronto no servidor. Use
-**Repetir teste** para medir com o arquivo preparado; os tempos incluem obtenção e
-exibição na tela, e a primeira página inclui a inicialização do visualizador.
-A tela antecipa só uma página vizinha, mantém no máximo três blobs e carrega a
-resolução maior apenas sob demanda. Não conclua o ganho em rede móvel a partir de
-tempos locais de conversão. Preparação automática de todo o documento no upload
-fica para a adoção do formato, após a avaliação do piloto.
+As rotas de imagens entregam somente arquivos prontos: nunca iniciam conversão.
+O upload e a criação de acessos agendam a preparação; documentos existentes são
+descobertos automaticamente na inicialização e a cada minuto. Um processo separado,
+com prioridade menor, prepara as bases compartilhadas e grava as três identificações
+em cada versão individual. A tabela `image_preparations` registra progresso, erros,
+retentativas e reservas de trabalho; reinícios retomam os arquivos já gerados.
+Um único trabalho de imagem pode executar por vez, mesmo durante sobreposição de
+processos. Trabalhos abandonados ficam disponíveis após cinco minutos.
+
+O painel mostra o progresso do documento e de cada acesso, permite **Retomar
+preparação** e **Priorizar imagens** para um destinatário. Inicialmente, a fila
+antecipa as primeiras cinco páginas dos acessos; depois conclui os mais recentes.
+Um acesso priorizado é preparado primeiro. A migração de documentos grandes pode
+demorar; a navegação pública permanece em PDF até o acesso completo estar pronto.
+Desativados aguardam reativação. A preparação não consome visualizações nem cria
+logs de cliente; senha, URL, código, limites e contadores existentes são preservados.
+
+O navegador antecipa uma página vizinha, mantém no máximo três blobs e baixa a
+resolução maior apenas ao ampliar. Os tempos da tela de teste incluem download,
+decodificação e exibição, e a primeira página inclui a inicialização. Acesso,
+expiração e revogação são conferidos em cada requisição; uma abertura reserva
+uma visualização independentemente da quantidade de páginas e resoluções.
 
 Dependências: `npm ci` (inclui `sharp` fixado no lockfile) e, no Ubuntu,
 `apt-get install --no-install-recommends poppler-utils fontconfig`.
 `PDFTOPPM_BIN` e `QPDF_BIN` permitem configurar os executáveis.
-Os derivados ficam em `<arquivo>.pdf.parts/image-preview/`, com cache por documento
-limitado por `IMAGE_PREVIEW_CACHE_MB` (1024 MB por padrão). Conversões de imagens têm
-fila própria limitada e processamento serial, separados da geração dos PDFs públicos.
-Excluir o documento remove também suas imagens de teste.
+Os derivados ficam em `<arquivo>.pdf.parts/image-preview/`. Depois de iniciar a
+preparação persistente, o marcador privado `.prepared` impede a remoção por limite
+de cache: arquivos prontos precisam continuar disponíveis sem reconversão. O limite
+`IMAGE_PREVIEW_CACHE_MB` aplica-se somente aos caches antigos ainda não preparados.
+O processo interrompe conversões quando restam menos de 2048 MB livres, configuráveis
+por `IMAGE_PREPARATION_MIN_FREE_MB` (mínimo 256 MB), e retoma com retentativas.
+Reserve espaço para bases de ambas as resoluções e versões de cada acesso; o uso
+cresce com o número de destinatários. Excluir o documento remove bases, imagens e
+trabalhos locais. Uma imagem preparada removida externamente volta à fila ao ser
+solicitada; nunca se entrega a base sem identificação.
+
+`IMAGE_PREPARATION_ENABLED=false` desliga o processo automático.
+`IMAGE_VIEWER_ENABLED=false` mantém os clientes no PDF durante uma avaliação interna.
+A migração do banco é aditiva; faça backup consistente antes de publicar. Voltar o
+código preserva originais, acessos e as tabelas de preparação.
+
+### Cloudflare R2 + Worker (opcional)
+
+A implementação da entrega privada está em `cloudflare/`, com instruções em
+`cloudflare/README.md`. Sem credenciais, a entrega continua na VPS. Após configurar
+o Worker e o R2 privado, a fila publica as imagens prontas no bucket e os acessos
+recebem autorizações assinadas de 45 segundos. O Worker consulta a VPS **antes de
+cada resposta**, inclusive antes de reutilizar o cache. O cache inclui documento,
+versão, destinatário, página e resolução; o navegador continua sem cache persistente.
+Originais e bases sem código nunca são enviados ao bucket. A configuração exige
+domínio personalizado/rota no Worker e preserva o domínio do site principal.
 
 ### Código individual nas páginas
 

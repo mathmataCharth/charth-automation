@@ -1,0 +1,15 @@
+name = "charth-lookbook-media"
+main = "media-worker.mjs"
+compatibility_date = "2026-10-21"
+workers_dev = false
+routes = [{ pattern = "media-lookbook.charth.cloud", custom_domain = true }]
+
+[vars]
+APP_ORIGIN = "https://lookbook.charth.cloud"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "charth-lookbook-private"
+
+# Set MEDIA_EDGE_SECRET with `wrangler secret put MEDIA_EDGE_SECRET`.
+# Keep the bucket private: do not enable r2.dev or attach a public bucket domain.

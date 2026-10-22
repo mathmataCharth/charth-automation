@@ -8,7 +8,7 @@ const { getLinkById } = require('../services/accessService');
 const { getDocumentById } = require('../services/documentService');
 const { readManifest } = require('../services/pdfPartsService');
 const { getMarkedPdf } = require('../services/watermarkService');
-const { getPreviewInfo, getMarkedImage } = require('../services/imagePreviewService');
+const { getPreviewInfo, getReadyImage } = require('../services/imagePreviewService');
 
 router.use(security);
 router.use((req, res, next) => {
@@ -67,7 +67,7 @@ router.get('/images/:version/:page/:profile', async (req, res) => {
     }
     try {
         const { source, link, doc } = req.preview;
-        const image = await getMarkedImage(source, link.version_code, Number(req.params.page),
+        const image = await getReadyImage(source, link.version_code, Number(req.params.page),
             req.params.profile, req.params.version, doc.page_count);
         if (!stillAvailable(req)) return res.status(404).json({ error: 'Acesso removido durante o teste.' });
         res.setHeader('X-Preview-Cache', image.cacheHit ? 'HIT' : 'MISS');

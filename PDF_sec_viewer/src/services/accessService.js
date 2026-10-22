@@ -62,6 +62,7 @@ function updateLinkLimits(id, maxViews, expiresAt) {
 
 function deleteLink(id) {
     db.transaction(() => {
+        db.prepare('DELETE FROM image_preparations WHERE access_link_id = ?').run(id);
         db.prepare('DELETE FROM access_logs WHERE access_link_id = ?').run(id);
         db.prepare('DELETE FROM access_links WHERE id = ?').run(id);
     })();

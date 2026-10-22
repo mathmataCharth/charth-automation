@@ -9,6 +9,7 @@ const db = new Database(dbPath);
 // Enable WAL mode for better concurrent performance
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
 
 // Create tables
 db.exec(`
@@ -62,5 +63,25 @@ CREATE TABLE IF NOT EXISTS admin_users (
 
 // Add identifiers to existing installations without changing tokens or passwords.
 require('../utils/accessCode').migrateAccessCodes(db);
+
+// Jobs survive application and worker restarts; originals and access rows are unchanged.
+db.exec(`CREATE TABLE IF NOT EXISTS image_preparations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    access_link_id INTEGER REFERENCES access_links(id) ON DELETE CASCADE,
+    job_key TEXT NOT NULL UNIQUE,
+    version TEXT NOT NULL,
+    storage TEXT NOT NULL DEFAULT 'local',
+    status TEXT NOT NULL DEFAULT 'queued',
+    completed INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    retry_at INTEGER NOT NULL DEFAULT 0,
+    lease_until INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_image_preparations_pending ON image_preparations(status, retry_at, lease_until);`);
 
 module.exports = db;
