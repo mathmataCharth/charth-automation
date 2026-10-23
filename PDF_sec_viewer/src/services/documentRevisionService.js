@@ -160,8 +160,9 @@ async function activateIfReady(id) {
         if (!base || missing) return false;
         const old = currentRevision(doc);
         db.prepare("UPDATE document_revisions SET status='archived' WHERE id=?").run(old.id);
-        db.prepare(`UPDATE image_preparations SET job_key='revision:'||?||':'||job_key,revision_id=?
-            WHERE document_id=? AND revision_id IS NULL`).run(old.id, old.id, doc.id);
+        // Bind the prefix as text: SQLite may stringify numeric parameters as 1.0.
+        db.prepare(`UPDATE image_preparations SET job_key=?||job_key,revision_id=?
+            WHERE document_id=? AND revision_id IS NULL`).run(`revision:${old.id}:`, old.id, doc.id);
         db.prepare(`UPDATE documents SET stored_filename=?,original_filename=?,file_size=?,page_count=?
             WHERE id=? AND stored_filename=?`).run(next.stored_filename, next.original_filename, next.file_size, next.page_count, doc.id, next.base_filename);
         db.prepare(`UPDATE image_preparations SET job_key=CASE WHEN access_link_id IS NULL THEN 'document:'||document_id

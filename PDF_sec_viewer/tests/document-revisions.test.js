@@ -93,6 +93,7 @@ test('upload queues an immutable version, serializes competing updates and prese
 
 test('validation and all background preparation leave the old document live', { skip: !available }, async () => {
     await prepareParts(path.join(folder, 'original.pdf'));
+    await jobs.scheduleDocument(id); await finishImages();
     const open = await request('/v/unchanged-link/view', { headers: client }); assert.equal(open.status, 200); await open.text();
     oldMetadata = await (await request('/api/pdf/unchanged-link/info', { headers: client })).json();
     const before = rows(), logs = events();
@@ -133,6 +134,9 @@ test('a database error rolls back the entire activation; a successful switch cha
     assert.equal(doc().stored_filename, 'original.pdf'); assert.equal(currentRevision().status, 'preparing');
     assert.deepEqual(db.prepare('SELECT * FROM image_preparations ORDER BY id').all(), prior);
     assert.equal(await revisions.activateIfReady(revisionId), true);
+    const archivedJobs = db.prepare('SELECT job_key,revision_id FROM image_preparations WHERE revision_id IS NOT NULL').all();
+    assert.ok(archivedJobs.length > 0);
+    for (const job of archivedJobs) assert.ok(job.job_key.startsWith(`revision:${job.revision_id}:`));
     assert.equal(doc().stored_filename, currentRevision().stored_filename); assert.equal(doc().page_count, 2);
     assert.equal(currentRevision().status, 'active'); assert.deepEqual(rows(), before); assert.deepEqual(events(), logs);
     assert.deepEqual(fs.readFileSync(path.join(folder, 'original.pdf')), original);
@@ -169,6 +173,14 @@ test('restoration validates the archived file and switches back while retaining 
     assert.equal(await revisions.activateIfReady(archived.id), true);
     assert.equal(doc().stored_filename, 'original.pdf'); assert.equal(doc().page_count, 1);
     assert.deepEqual(rows(), before); assert.deepEqual(events(), logs);
+    const jobCount = db.prepare('SELECT COUNT(*) n FROM image_preparations').get().n;
+    for (const restoreId of [revisionId, archived.id]) {
+        revisions.requestRestore(id, restoreId, documentVersion(doc()), 'tester');
+        await revisions.runRevisionStep(); await finishImages();
+        assert.equal(await revisions.activateIfReady(restoreId), true);
+        assert.equal(db.prepare('SELECT COUNT(*) n FROM image_preparations').get().n, jobCount, 'prepared jobs are reused across repeated restorations');
+        assert.deepEqual(rows(), before); assert.deepEqual(events(), logs);
+    }
     assert.deepEqual(fs.readFileSync(path.join(folder, 'original.pdf')), original);
     const preview = await request(`/admin/links/${linkId}/preview/revisions/${revisionId}/pdf/info`, { headers: admin });
     assert.equal(preview.status, 200); assert.equal((await preview.json()).pageCount, 2);
