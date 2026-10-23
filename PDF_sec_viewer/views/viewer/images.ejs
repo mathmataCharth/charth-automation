@@ -7,9 +7,9 @@
     <link rel="stylesheet" href="/public/admin/css/image-preview.css">
     <script src="/public/admin/js/image-preview.js" defer></script>
 </head>
-<body>
+<body class="customer-viewer">
     <header class="test-header">
-        <div class="test-heading"><strong class="brand">CHARTH</strong><span><%= title %></span></div>
+        <div class="test-heading"><strong class="brand">CHARTH</strong><span class="document-title" title="<%= title %>"><%= title %></span></div>
         <nav class="test-tools" aria-label="Controles de visualização">
             <div class="page-controls">
                 <button id="previous" aria-label="Página anterior" disabled>&#8592;</button>
@@ -20,9 +20,13 @@
             </div>
             <div class="zoom-controls">
                 <button id="zoom-out" aria-label="Reduzir zoom">−</button>
-                <span id="zoom-value">100%</span>
+                <select id="zoom-value" aria-label="Tamanho de visualização">
+                    <% for (let percent = 25; percent <= 300; percent += 5) { %>
+                        <option value="<%= percent %>" <%= percent === 75 ? 'selected' : '' %>><%= percent %>%</option>
+                    <% } %>
+                </select>
                 <button id="zoom-in" aria-label="Aumentar zoom">+</button>
-                <button id="fit">Ajustar</button>
+                <button id="fit" title="Encaixar a página inteira na tela">Ajustar</button>
             </div>
         </nav>
     </header>

@@ -31,7 +31,7 @@ const ctx = canvas.getContext('2d', { alpha: false });
 
 let pdfDoc = null;
 let currentPage = 1;
-let currentScale = 1.5;
+let currentScale = 0.75;
 let rendering = false;
 let pageNumPending = null;
 let currentRenderTask = null;
@@ -359,13 +359,13 @@ pageInput.addEventListener('keydown', function (e) {
 });
 
 btnZoomIn.addEventListener('click', function () {
-    currentScale = Math.min(4.0, currentScale + 0.25);
+    currentScale = Math.min(4.0, (Math.round(currentScale * 100) + 5) / 100);
     invalidateCacheOnScaleChange();
     queueRenderPage(currentPage);
 });
 
 btnZoomOut.addEventListener('click', function () {
-    currentScale = Math.max(0.25, currentScale - 0.25);
+    currentScale = Math.max(0.25, (Math.round(currentScale * 100) - 5) / 100);
     invalidateCacheOnScaleChange();
     queueRenderPage(currentPage);
 });

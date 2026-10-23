@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 const script = fs.readFileSync(path.resolve(__dirname, '../public/admin/js/image-preview.js'), 'utf8');
 
-function pilot(mode = 'images') {
+function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {}) {
     const elements = new Map(), requests = [], blobs = new Map(), timers = new Map(), holds = new Map();
     const revoked = [], pdfOpened = [];
     let serial = 0, clock = 0, fail = null;
@@ -14,7 +14,7 @@ function pilot(mode = 'images') {
     function element(id) {
         if (elements.has(id)) return elements.get(id);
         const classes = new Set();
-        const value = { id, style: {}, hidden: true, value: '1', disabled: false, clientWidth: 1000,
+        const value = { id, style: {}, hidden: true, value: '1', disabled: false, clientWidth: width, clientHeight: height,
             dataset: { prefix, mode, page: '1' }, listeners: {},
             classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
             addEventListener(name, callback) { this.listeners[name] = callback; },
@@ -33,6 +33,7 @@ function pilot(mode = 'images') {
         }
     }
     const window = { innerWidth: 1200, devicePixelRatio: 1, location: {}, listeners: {},
+        getComputedStyle: () => ({ paddingLeft: String(padding), paddingRight: String(padding), paddingTop: String(padding), paddingBottom: String(padding) }),
         addEventListener(name, callback) { this.listeners[name] = callback; },
         pdfjsLib: { GlobalWorkerOptions: {}, getDocument({ url }) {
             pdfOpened.push(url);
@@ -76,6 +77,7 @@ function pilot(mode = 'images') {
         return () => { release(); holds.delete(url); };
     }
     return { elements, requests, revoked, blobs, window, pdfOpened, settle, go, hold,
+        selectZoom: async value => { element('zoom-value').value = String(value); element('zoom-value').listeners.change(); await settle(); },
         click: async id => { element(id).listeners.click(); await settle(); },
         failPage: page => { fail = `${prefix}/images/version/${page}/view`; },
         runPrefetch: async () => { for (const [id, timer] of timers) if (timer.delay === 700) { timers.delete(id); timer.callback(); break; } await settle(); } };
@@ -87,6 +89,8 @@ test('the image pilot initially fetches one page, prefetches one neighbor and re
     assert.deepEqual(p.requests, ['/admin/links/1/preview/info', '/admin/links/1/preview/images/version/1/view']);
     assert.equal(p.elements.get('page-image').hidden, false);
     assert.equal(p.elements.get('page-canvas').hidden, true);
+    assert.equal(p.elements.get('zoom-value').value, '75');
+    assert.equal(p.elements.get('page-image').style.width, '720px');
     assert.match(p.elements.get('first-time').textContent, /s$/);
     await p.runPrefetch();
     assert.ok(p.requests.at(-1).endsWith('/2/view'));
@@ -96,12 +100,36 @@ test('the image pilot initially fetches one page, prefetches one neighbor and re
     assert.equal(p.elements.get('page-number').value, 2);
     assert.ok(p.elements.get('mode-pdf').href.endsWith('?mode=pdf&page=2'));
     await p.click('zoom-in');
+    assert.equal(p.elements.get('zoom-value').value, '80');
+    assert.equal(p.requests.length, before, 'a 5% change reuses the decoded image');
+    await p.selectZoom(130);
     assert.ok(p.requests.at(-1).endsWith('/2/detail'));
-    assert.equal(p.elements.get('zoom-value').textContent, '150%');
+    assert.equal(p.elements.get('zoom-value').value, '130');
     assert.match(p.elements.get('asset-details').textContent, /4800 px/);
     await p.click('fit');
-    assert.equal(p.elements.get('zoom-value').textContent, '100%');
+    assert.equal(p.elements.get('zoom-value').value, '100');
     assert.equal(p.pdfOpened.length, 0);
+});
+
+test('fit uses both screen dimensions and a selected zoom stays in 5% steps through page navigation', async () => {
+    const p = pilot('images', { width: 1900, height: 840, padding: 8 });
+    await p.settle();
+    assert.equal(p.elements.get('zoom-value').value, '75');
+    await p.click('fit');
+    assert.equal(p.elements.get('zoom-value').value, '60');
+    const displayedWidth = parseFloat(p.elements.get('page-image').style.width);
+    assert.ok(displayedWidth <= 1884);
+    assert.ok(displayedWidth * .704 <= 824);
+    await p.click('zoom-in');
+    assert.equal(p.elements.get('zoom-value').value, '65');
+    await p.go(2);
+    assert.equal(p.elements.get('zoom-value').value, '65');
+    await p.click('zoom-out');
+    assert.equal(p.elements.get('zoom-value').value, '60');
+    await p.selectZoom(300);
+    assert.equal(p.elements.get('zoom-in').disabled, true);
+    await p.selectZoom(25);
+    assert.equal(p.elements.get('zoom-out').disabled, true);
 });
 
 test('late image responses cannot replace a more recently selected page', async () => {

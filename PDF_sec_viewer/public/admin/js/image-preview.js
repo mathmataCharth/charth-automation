@@ -10,14 +10,25 @@
     const message = el('message');
     const images = new Map();
     const documents = new Map();
-    let info, target = Number(stage.dataset.page) || 1, zoom = 1, revision = 0;
+    let info, target = Number(stage.dataset.page) || 1, zoom = 0.75, revision = 0;
+    let fitPage = false;
     let visibleUrl = '', firstShown = false, renderTask = null, pdfLibrary = null;
     let prefetchTimer, resizeTimer;
     const now = () => performance.now();
     const paint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const seconds = value => (value / 1000).toFixed(2).replace('.', ',') + ' s';
     const bytes = value => value >= 1024 * 1024 ? (value / 1024 / 1024).toFixed(2).replace('.', ',') + ' MB' : Math.round(value / 1024) + ' KB';
-    const fitWidth = () => Math.max(200, stage.clientWidth - (window.innerWidth <= 640 ? 24 : 40));
+    function availableSize() {
+        const style = window.getComputedStyle(stage);
+        return { width: Math.max(1, stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)),
+            height: Math.max(1, stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) };
+    }
+    const fitWidth = () => availableSize().width;
+    function fitZoom(width, height) {
+        const available = availableSize();
+        // Round down to the same 5% steps shown in the size selector.
+        return Math.max(0.25, Math.floor(Math.min(1, available.height * width / height / available.width) * 20) / 20);
+    }
 
     function controls() {
         el('page-number').value = target;
@@ -25,8 +36,8 @@
         el('page-total').textContent = info?.pageCount || '…';
         el('previous').disabled = !info || target <= 1;
         el('next').disabled = !info || target >= info.pageCount;
-        el('zoom-value').textContent = Math.round(zoom * 100) + '%';
-        el('zoom-out').disabled = zoom <= 0.5;
+        el('zoom-value').value = String(Math.round(zoom * 100));
+        el('zoom-out').disabled = zoom <= 0.25;
         el('zoom-in').disabled = zoom >= 3;
         el('mode-images').href = prefix + '?page=' + target;
         el('mode-pdf').href = prefix + '?mode=pdf&page=' + target;
@@ -116,6 +127,7 @@
             const source = await pdf.getPage(page - parts[index].start + 1);
             if (token !== revision) return null;
             const natural = source.getViewport({ scale: 1 });
+            if (fitPage) zoom = fitZoom(natural.width, natural.height);
             let scale = fitWidth() * zoom * Math.min(window.devicePixelRatio || 1, 2) / natural.width;
             scale = Math.min(scale, Math.sqrt(16000000 / (natural.width * natural.height)));
             const viewport = source.getViewport({ scale });
@@ -152,6 +164,7 @@
                 const profile = zoom > 1.25 ? 'detail' : 'view';
                 const entry = await getImage(target, profile);
                 if (token !== revision) return;
+                if (fitPage) zoom = fitZoom(entry.width, entry.height);
                 visibleUrl = entry.url;
                 image.src = entry.url;
                 image.style.width = Math.round(fitWidth() * zoom) + 'px';
@@ -221,9 +234,16 @@
         if (Number.isSafeInteger(page)) show(page); else controls();
     });
     el('page-number').addEventListener('keydown', event => { if (event.key === 'Enter') el('page-number').blur(); });
-    el('zoom-in').addEventListener('click', () => { zoom = Math.min(3, zoom + 0.5); show(target); });
-    el('zoom-out').addEventListener('click', () => { zoom = Math.max(0.5, zoom - 0.5); show(target); });
-    el('fit').addEventListener('click', () => { zoom = 1; show(target); });
+    function setZoom(percent) {
+        if (!Number.isFinite(percent)) return;
+        zoom = Math.max(25, Math.min(300, Math.round(percent / 5) * 5)) / 100;
+        fitPage = false;
+        show(target);
+    }
+    el('zoom-in').addEventListener('click', () => setZoom(Math.round(zoom * 100) + 5));
+    el('zoom-out').addEventListener('click', () => setZoom(Math.round(zoom * 100) - 5));
+    el('zoom-value').addEventListener('change', () => setZoom(Number(el('zoom-value').value)));
+    el('fit').addEventListener('click', () => { fitPage = true; show(target); });
     el('repeat').addEventListener('click', () => { window.location.href = prefix + '?mode=' + mode + '&page=' + target; });
     el('retry').addEventListener('click', () => { if (info) show(target); else start(); });
     document.addEventListener('contextmenu', event => event.preventDefault());

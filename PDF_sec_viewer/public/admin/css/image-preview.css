@@ -2,11 +2,11 @@
 :root { color-scheme: dark; font-family: Arial, sans-serif; background: #1a1a1a; color: #eee; }
 body { margin: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
 a { color: inherit; }
-button, input, .mode-switch a { font: inherit; font-size: 13px; }
+button, input, select, .mode-switch a { font: inherit; font-size: 13px; }
 button, .mode-switch a { background: #242424; color: #eee; border: 1px solid #454545; border-radius: 4px; padding: 8px 11px; cursor: pointer; }
 button:hover, .mode-switch a:hover { border-color: #e4d5d3; }
 button:disabled { opacity: .35; cursor: default; }
-button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #e4d5d3; outline-offset: 3px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #e4d5d3; outline-offset: 3px; }
 .test-header { background: #111; padding: 16px 24px 12px; border-bottom: 1px solid #333; flex: none; }
 .test-heading { display: flex; gap: 16px; align-items: center; }
 .back { font-size: 12px; text-decoration: none; color: #ccc; }
@@ -21,7 +21,7 @@ h1 { font-size: 16px; margin: 0 0 6px; font-weight: 500; overflow-wrap: anywhere
 .mode-switch .selected { color: #111; background: #e4d5d3; border-color: #e4d5d3; }
 .page-controls, .zoom-controls { font-size: 12px; color: #bbb; }
 #page-number { width: 55px; background: #222; color: white; border: 1px solid #555; border-radius: 3px; text-align: center; padding: 7px 3px; }
-#zoom-value { min-width: 42px; text-align: center; }
+#zoom-value { width: 70px; height: 32px; background: #222; color: #eee; border: 1px solid #555; border-radius: 3px; padding: 3px; }
 #repeat { margin-left: auto; color: #e4d5d3; }
 #preview { position: relative; flex: 1; min-height: 0; padding: 20px; overflow: auto; }
 .page-surface { display: block; margin: 0 auto; max-width: none; user-select: none; pointer-events: none; background: white; }
@@ -32,6 +32,15 @@ h1 { font-size: 16px; margin: 0 0 6px; font-weight: 500; overflow-wrap: anywhere
 .test-metrics { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; flex: none; padding: 12px 18px; border-top: 1px solid #333; background: #111; color: #aaa; font-size: 12px; line-height: 1.5; }
 .test-metrics strong { color: #eee; font-weight: 400; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.customer-viewer { overflow: hidden; }
+.customer-viewer .test-header { min-height: 44px; padding: 5px 12px; display: flex; align-items: center; gap: 20px; }
+.customer-viewer .test-heading { min-width: 0; flex: 1; gap: 12px; }
+.customer-viewer .brand { margin-left: 0; font-size: 15px; letter-spacing: 3px; flex: none; }
+.customer-viewer .document-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #bbb; }
+.customer-viewer .test-tools { margin-top: 0; flex: none; flex-wrap: nowrap; gap: 16px; }
+.customer-viewer button { min-height: 32px; padding: 5px 9px; }
+.customer-viewer #page-number { width: 46px; height: 32px; padding: 3px; }
+.customer-viewer #preview { padding: 8px; }
 @media (max-width: 640px) {
     .test-header { padding: 12px; }
     .test-heading { gap: 10px; }
@@ -40,5 +49,19 @@ h1 { font-size: 16px; margin: 0 0 6px; font-weight: 500; overflow-wrap: anywhere
     #repeat { margin-left: 0; }
     #preview { padding: 12px; }
     .test-metrics { gap: 5px 14px; padding: 8px 10px; font-size: 11px; }
+    .customer-viewer .test-header { padding: 5px 6px; }
+    .customer-viewer .test-heading { display: none; }
+    .customer-viewer .test-tools { width: 100%; justify-content: space-between; gap: 6px; }
+    .customer-viewer .page-controls, .customer-viewer .zoom-controls { gap: 4px; }
+    .customer-viewer button { padding: 5px 8px; }
+    .customer-viewer #page-number { width: 40px; }
+    .customer-viewer #zoom-value { width: 64px; }
+    .customer-viewer #preview { padding: 6px; }
+}
+@media (max-width: 360px) {
+    .customer-viewer button { padding: 5px 6px; font-size: 12px; }
+    .customer-viewer #page-number { width: 34px; }
+    .customer-viewer #zoom-value { width: 60px; }
+    .customer-viewer .page-controls, .customer-viewer .zoom-controls { gap: 3px; }
 }
 @media print { body { display: none !important; } }

@@ -33,9 +33,13 @@
             </div>
             <div class="zoom-controls">
                 <button id="zoom-out" aria-label="Reduzir zoom">−</button>
-                <span id="zoom-value">100%</span>
+                <select id="zoom-value" aria-label="Tamanho de visualização">
+                    <% for (let percent = 25; percent <= 300; percent += 5) { %>
+                        <option value="<%= percent %>" <%= percent === 75 ? 'selected' : '' %>><%= percent %>%</option>
+                    <% } %>
+                </select>
                 <button id="zoom-in" aria-label="Aumentar zoom">+</button>
-                <button id="fit">Ajustar</button>
+                <button id="fit" title="Encaixar a página inteira na tela">Ajustar</button>
             </div>
             <button id="repeat">Repetir teste</button>
         </nav>
