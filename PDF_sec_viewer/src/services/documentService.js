@@ -37,8 +37,9 @@ function deleteDocument(id) {
     if (!doc) return false;
 
     const uploadDir = path.resolve(process.env.UPLOAD_DIR || './uploads');
-    const baseFile = path.resolve(uploadDir, doc.stored_filename);
-    if (!baseFile.startsWith(uploadDir + path.sep)) {
+    const filenames = new Set([doc.stored_filename, ...db.prepare('SELECT stored_filename FROM document_revisions WHERE document_id=?').all(id).map(row => row.stored_filename)]);
+    const files = [...filenames].map(name => path.resolve(uploadDir, name));
+    if (files.some(file => !file.startsWith(uploadDir + path.sep))) {
         throw new Error('Caminho de documento inválido.');
     }
 
@@ -46,6 +47,8 @@ function deleteDocument(id) {
     // in a single transaction, before touching any of the physical files.
     db.transaction(() => {
         db.prepare('DELETE FROM image_preparations WHERE document_id = ?').run(id);
+        db.prepare('DELETE FROM document_revision_events WHERE document_id = ?').run(id);
+        db.prepare('DELETE FROM document_revisions WHERE document_id = ?').run(id);
         db.prepare(`DELETE FROM access_logs WHERE access_link_id IN
             (SELECT id FROM access_links WHERE document_id = ?)`).run(id);
         db.prepare('DELETE FROM access_links WHERE document_id = ?').run(id);
@@ -53,22 +56,24 @@ function deleteDocument(id) {
     })();
 
     // Remove the original and any derived files only after the transaction commits.
-    for (const suffix of ['', '.compressed', '.linearized']) {
-        const p = baseFile + suffix;
-        try {
-            if (fs.existsSync(p)) fs.unlinkSync(p);
-        } catch (e) {
-            console.warn(`[DELETE] Falha ao remover ${p}:`, e.message);
+    for (const baseFile of files) {
+        for (const suffix of ['', '.compressed', '.linearized']) {
+            const p = baseFile + suffix;
+            try {
+                if (fs.existsSync(p)) fs.unlinkSync(p);
+            } catch (e) {
+                console.warn(`[DELETE] Falha ao remover ${p}:`, e.message);
+            }
         }
-    }
 
-    // Derived blocks live only beside this document, inside the upload directory.
-    const partsDir = path.resolve(baseFile + '.parts');
-    if (partsDir.startsWith(uploadDir + path.sep)) {
-        try {
-            fs.rmSync(partsDir, { recursive: true, force: true });
-        } catch (e) {
-            console.warn('[DELETE] Falha ao remover blocos:', e.message);
+        // All retained versions belong to this document and stay inside uploads.
+        const partsDir = path.resolve(baseFile + '.parts');
+        if (partsDir.startsWith(uploadDir + path.sep)) {
+            try {
+                fs.rmSync(partsDir, { recursive: true, force: true });
+            } catch (e) {
+                console.warn('[DELETE] Falha ao remover blocos:', e.message);
+            }
         }
     }
 

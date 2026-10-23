@@ -77,7 +77,7 @@
         // Keep at most three blobs, including the visible one. Drop old detail
         // images before previews, so long sessions do not accumulate large files.
         for (const [key, entry] of images) {
-            const page = Number(key.split(':')[0]);
+            const page = entry.page;
             if (entry.url === visibleUrl || (images.size <= 3 && (entry.profile !== 'detail' || page === target))) continue;
             entry.controller.abort();
             if (entry.url) URL.revokeObjectURL(entry.url);
@@ -86,21 +86,22 @@
     }
 
     function getImage(page, profile) {
-        const key = page + ':' + profile;
+        const version = info.version;
+        const key = version + ':' + page + ':' + profile;
         if (images.has(key)) {
             const entry = images.get(key);
             images.delete(key);
             images.set(key, entry);
             return entry.promise.then(result => ({ ...result, memoryHit: true }));
         }
-        const entry = { profile, controller: new AbortController() };
+        const entry = { page, profile, version, controller: new AbortController() };
         entry.promise = (async () => {
-            const response = await fetch(`${prefix}/images/${info.version}/${page}/${profile}`, {
+            const response = await fetch(`${prefix}/images/${version}/${page}/${profile}`, {
                 credentials: 'same-origin', cache: 'no-store', signal: entry.controller.signal
             });
             if (!response.ok) {
                 const problem = await response.json().catch(() => ({}));
-                throw new Error(problem.error || 'Imagem indisponível. Tente novamente.');
+                throw Object.assign(new Error(problem.error || 'Imagem indisponível. Tente novamente.'), { status: response.status });
             }
             const blob = await response.blob();
             entry.url = URL.createObjectURL(blob);
@@ -152,8 +153,8 @@
         entry.users++;
         try {
             const pdf = await entry.promise;
-            if (!info.parts) { info.pageCount = pdf.numPages; parts[0].end = pdf.numPages; }
             if (token !== revision) return null;
+            if (!info.parts) { info.pageCount = pdf.numPages; parts[0].end = pdf.numPages; }
             const source = await pdf.getPage(page - parts[index].start + 1);
             if (token !== revision) return null;
             const natural = source.getViewport({ scale: 1 });
@@ -240,18 +241,35 @@
             }
         } catch (error) {
             if (token !== revision) return;
+            if (error.status === 409) { await start(info.version); return; }
             failed(error.message || 'Não foi possível carregar a página.');
         }
     }
 
-    async function start() {
+    async function start(previousVersion) {
+        const token = ++revision;
         loading('Carregando página…');
         try {
             const response = await fetch(prefix + (mode === 'pdf' ? '/pdf/info' : '/info'), { credentials: 'same-origin', cache: 'no-store' });
             if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão terminou. Abra novamente o link de acesso.' : 'Documento indisponível.');
-            info = await response.json();
+            const next = await response.json();
+            if (token !== revision) return;
+            if (previousVersion && next.version === previousVersion) throw new Error('Documento atualizado. Tente novamente para carregar a versão atual.');
+            if (info && next.version !== info.version) {
+                for (const [key, entry] of images) {
+                    if (entry.url === visibleUrl) continue;
+                    entry.controller.abort();
+                    if (entry.url) URL.revokeObjectURL(entry.url);
+                    images.delete(key);
+                }
+                for (const entry of documents.values()) entry.task.destroy().catch(() => {});
+                documents.clear();
+                visiblePage = 0;
+            }
+            info = next;
             await show(target, 0);
         } catch (error) {
+            if (token !== revision) return;
             failed(error.message || 'Não foi possível carregar o documento.');
         }
     }
@@ -274,7 +292,7 @@
     el('zoom-value').addEventListener('change', () => setZoom(Number(el('zoom-value').value)));
     el('fit').addEventListener('click', () => { fitPage = true; show(target); });
     el('repeat').addEventListener('click', () => { window.location.href = prefix + '?mode=' + mode + '&page=' + target; });
-    el('retry').addEventListener('click', () => { if (info) show(target); else start(); });
+    el('retry').addEventListener('click', () => start());
     document.addEventListener('contextmenu', event => event.preventDefault());
     document.addEventListener('dragstart', event => event.preventDefault());
     document.addEventListener('keydown', event => {

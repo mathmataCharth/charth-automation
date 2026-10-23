@@ -17,9 +17,15 @@ const { getAllDocuments, getDocumentById, createDocument, toggleDocument, delete
 const { getLinksForDocument, createLink, toggleLink, deleteLink, getLinkById, updateLinkLimits } = require('../services/accessService');
 const { parseAccessLimits, expiryInput } = require('../utils/accessLimits');
 const { scheduleDocument, statusForDocument } = require('../services/imagePreparationService');
+const revisions = require('../services/documentRevisionService');
+const { documentVersion } = require('../utils/documentVersion');
 
 router.use((req, res, next) => {
     res.locals.expiryInput = expiryInput;
+    res.locals.revisionsForDocument = revisions.revisionsForDocument;
+    res.locals.documentVersion = documentVersion;
+    res.locals.revisionDate = value => value ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo',
+        dateStyle: 'short', timeStyle: 'short' }).format(new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z')) : '—';
     next();
 });
 
@@ -194,6 +200,45 @@ router.get('/documents/:id', adminAuth, (req, res) => {
     res.render('admin/document', { doc, links, baseUrl, linkUpdated, adminUsername: req.session.adminUsername });
 });
 
+router.post('/documents/:id/revisions', adminAuth, (req, res) => {
+    if (!getDocumentById(req.params.id)) return res.status(404).send('Documento não encontrado.');
+    upload.single('pdf')(req, res, async uploadError => {
+        let submitted = false;
+        try {
+            if (uploadError) throw Object.assign(new Error(uploadError.message), { status: 400 });
+            if (!req.file) throw Object.assign(new Error('Selecione o novo PDF.'), { status: 400 });
+            const handle = await fs.promises.open(req.file.path, 'r');
+            const header = Buffer.alloc(5);
+            try { await handle.read(header, 0, 5, 0); } finally { await handle.close(); }
+            if (header.toString('ascii') !== '%PDF-') throw Object.assign(new Error('O arquivo enviado não é um PDF válido.'), { status: 400 });
+            await fs.promises.chmod(req.file.path, 0o600);
+            revisions.createRevision(Number(req.params.id), req.file, req.body.document_version, req.session.adminUsername);
+            submitted = true;
+            return res.redirect(`/admin/documents/${req.params.id}#document-revisions`);
+        } catch (error) {
+            return res.status(error.status || 503).send(error.status ? error.message : 'Não foi possível receber a atualização. A versão atual foi preservada.');
+        } finally {
+            if (!submitted && req.file) {
+                const file = path.resolve(req.file.path);
+                if (file.startsWith(uploadDir + path.sep)) await fs.promises.unlink(file).catch(() => {});
+            }
+        }
+    });
+});
+
+router.get('/documents/:id/revisions/status', adminAuth, (req, res) => {
+    if (!getDocumentById(req.params.id)) return res.status(404).end();
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json({ revisions: revisions.revisionsForDocument(req.params.id) });
+});
+router.post('/documents/:id/revisions/:revisionId/:action(restore|retry|cancel)', adminAuth, (req, res) => {
+    try {
+        if (req.params.action === 'restore') revisions.requestRestore(Number(req.params.id), Number(req.params.revisionId), req.body.document_version, req.session.adminUsername);
+        else revisions.controlRevision(Number(req.params.id), Number(req.params.revisionId), req.params.action, req.session.adminUsername);
+        return res.redirect(`/admin/documents/${req.params.id}#document-revisions`);
+    } catch (error) { return res.status(error.status || 503).send(error.status ? error.message : 'Não foi possível alterar esta atualização.'); }
+});
+
 router.get('/documents/:id/images/status', adminAuth, (req, res) => {
     if (!getDocumentById(req.params.id)) return res.status(404).end();
     res.setHeader('Cache-Control', 'private, no-store');
@@ -339,6 +384,7 @@ router.get('/logs', adminAuth, (req, res) => {
     });
 });
 
+router.use('/links/:id/preview/revisions/:revisionId', require('./preview'));
 router.use('/links/:id/preview', require('./preview'));
 
 module.exports = router;

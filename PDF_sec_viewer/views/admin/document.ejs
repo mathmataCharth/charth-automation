@@ -69,6 +69,70 @@
             </div>
         </div>
 
+        <% const revisions = revisionsForDocument(doc.id); %>
+        <% const updating = revisions.some(revision => ['queued','validating','preparing'].includes(revision.status)); %>
+        <% const revisionLabels = { active: 'Em uso', archived: 'Versão anterior', queued: 'Na fila', validating: 'Validando PDF', preparing: 'Preparando imagens', failed: 'Preparação interrompida', cancelled: 'Cancelada' }; %>
+        <div class="card mb-24" id="document-revisions" data-revision-status="/admin/documents/<%= doc.id %>/revisions/status">
+            <div class="card-header"><h3>Atualizar PDF</h3></div>
+            <div class="card-body">
+                <p>Substitua o PDF mantendo todos os links, senhas, códigos, limites e histórico dos acessos.</p>
+                <p class="text-sm text-muted">A versão atual continua disponível durante a preparação. O novo PDF entra em uso automaticamente após a validação e a preparação das páginas e dos acessos ativos. Os arquivos anteriores ficam no histórico para restauração.</p>
+                <% if (updating) { %>
+                    <div class="alert alert-success" role="status">Uma atualização está em preparação. Acompanhe o progresso abaixo.</div>
+                <% } else { %>
+                    <form method="POST" action="/admin/documents/<%= doc.id %>/revisions" enctype="multipart/form-data">
+                        <input type="hidden" name="document_version" value="<%= documentVersion(doc) %>">
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="replacement-pdf">Novo arquivo PDF</label>
+                                <input type="file" id="replacement-pdf" name="pdf" accept="application/pdf,.pdf" class="form-control" required>
+                            </div>
+                            <div class="form-group align-bottom"><button type="submit" class="btn btn-primary">Enviar nova versão</button></div>
+                        </div>
+                    </form>
+                <% } %>
+                <% if (revisions.length) { %>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead><tr><th>Arquivo</th><th>Páginas</th><th>Data (Brasília)</th><th>Status</th><th>Ações</th></tr></thead>
+                            <tbody>
+                                <% revisions.forEach(revision => { %>
+                                    <tr data-revision-id="<%= revision.id %>" data-revision-state="<%= revision.status %>">
+                                        <td><strong><%= revision.original_filename %></strong><div class="text-sm text-muted"><%= (revision.file_size / 1048576).toFixed(2) %> MB</div></td>
+                                        <td><%= revision.page_count || '—' %></td>
+                                        <td class="text-sm"><%= revisionDate(revision.activated_at || revision.created_at) %></td>
+                                        <td><span class="revision-state"><%= revisionLabels[revision.status] || revision.status %></span>
+                                            <% if (revision.status === 'preparing' && revision.total) { %><span class="revision-progress"> · <%= Math.floor(revision.completed / revision.total * 100) %>%</span><% } else { %><span class="revision-progress"></span><% } %>
+                                            <% if (revision.error) { %><div class="text-sm" role="alert"><%= revision.error %></div><% } %>
+                                        </td>
+                                        <td class="actions-cell">
+                                            <% if (links.length && ['active','archived','preparing'].includes(revision.status)) { %>
+                                                <a class="btn btn-xs btn-secondary" href="/admin/links/<%= links[0].id %>/preview/revisions/<%= revision.id %>?mode=pdf">Conferir PDF</a>
+                                            <% } %>
+                                            <% if (revision.status === 'archived' && !updating) { %>
+                                                <form method="POST" action="/admin/documents/<%= doc.id %>/revisions/<%= revision.id %>/restore" class="confirm-delete" data-message="Restaurar esta versão para os mesmos acessos após a preparação?">
+                                                    <input type="hidden" name="document_version" value="<%= documentVersion(doc) %>">
+                                                    <button type="submit" class="btn btn-xs btn-secondary">Restaurar versão</button>
+                                                </form>
+                                            <% } %>
+                                            <% if (revision.status === 'failed' && !updating) { %>
+                                                <form method="POST" action="/admin/documents/<%= doc.id %>/revisions/<%= revision.id %>/retry"><button type="submit" class="btn btn-xs btn-secondary">Tentar novamente</button></form>
+                                            <% } %>
+                                            <% if (['queued','validating','preparing','failed'].includes(revision.status)) { %>
+                                                <form method="POST" action="/admin/documents/<%= doc.id %>/revisions/<%= revision.id %>/cancel" class="confirm-delete" data-message="Cancelar esta atualização e manter o PDF atual?">
+                                                    <button type="submit" class="btn btn-xs btn-secondary">Cancelar atualização</button>
+                                                </form>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
         <div class="card mb-24" data-image-status="/admin/documents/<%= doc.id %>/images/status">
             <div class="card-header"><h3>Preparação das imagens</h3></div>
             <div class="card-body">
@@ -251,5 +315,6 @@
 
     <script src="/public/admin/js/admin.js"></script>
     <script src="/public/admin/js/image-preparation.js"></script>
+    <script src="/public/admin/js/document-revisions.js"></script>
 </body>
 </html>

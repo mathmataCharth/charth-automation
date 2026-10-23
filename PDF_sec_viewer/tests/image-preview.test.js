@@ -186,7 +186,7 @@ test('PDF comparison delivers the same individual code through admin-only routes
     const manifestResponse = await admin('/pdf/info');
     const metadata = await manifestResponse.json();
     assert.equal(metadata.pageCount, 4);
-    assert.equal(metadata.url, `/admin/links/${accessId}/preview/pdf/document`);
+    assert.ok(metadata.url.startsWith(`/admin/links/${accessId}/preview/pdf/document?revision=`));
     const response = await admin('/pdf/document');
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /application\/pdf/);

@@ -125,6 +125,31 @@ O usuário admin é criado automaticamente no banco ao iniciar, com as credencia
 
 ## Instalação e execução
 
+### Atualizar o PDF dos acessos existentes
+
+No painel do documento, use **Atualizar PDF → Enviar nova versão**. Os mesmos
+links passam a abrir o novo arquivo, mantendo senha, código individual, contagem
+e limite de visualizações, expiração, ativação e histórico. A atualização não
+reativa acessos bloqueados ou esgotados.
+
+O envio cria um arquivo independente. Um processo em segundo plano verifica a
+integridade do PDF, rejeita criptografia/senha e prepara os blocos e as imagens
+das duas resoluções para todos os acessos ativos. O PDF atual continua disponível
+até a preparação completa; a troca do arquivo e dos trabalhos acontece em uma
+única transação. A versão do arquivo acompanha as URLs de páginas e blocos para
+evitar misturar arquivos durante uma sessão aberta, sem reservar outra visualização.
+
+O painel mostra o progresso e permite cancelar ou retomar uma preparação que
+falhou. Há somente uma atualização pendente por documento. PDFs anteriores ficam
+no histórico com **Conferir PDF** e **Restaurar versão**; a restauração passa pela
+mesma validação e preparação antes de entrar em uso. A conferência é exclusiva do
+administrador e não consome visualizações de clientes.
+
+Mantenha `qpdf`, Poppler e o processo de imagens funcionando. A preparação respeita
+a reserva de espaço configurada por `IMAGE_PREPARATION_MIN_FREE_MB`; falhas deixam
+a versão atual em uso. O histórico ocupa espaço adicional e deve entrar no backup
+do banco e de `uploads/`. Excluir o documento remove também suas versões e derivados.
+
 ### Teste interno de visualização por imagens
 
 Na lista de acessos do documento, **Testar imagens** abre uma tela restrita ao

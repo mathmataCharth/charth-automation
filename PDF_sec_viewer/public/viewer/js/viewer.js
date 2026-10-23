@@ -35,6 +35,9 @@ let currentScale = 0.65;
 let rendering = false;
 let pageNumPending = null;
 let currentRenderTask = null;
+let loadedVersion = null;
+let refreshTask = null;
+let documentGeneration = 0;
 
 // Cache LRU de páginas já renderizadas (ImageBitmap)
 const RENDER_CACHE_SIZE = 6;
@@ -52,8 +55,10 @@ function blockForPage(num) {
 }
 
 async function withPage(num, callback) {
+    const generation = documentGeneration;
     const index = blockForPage(num);
     if (index < 0) throw new Error('Página indisponível.');
+    const part = documentParts[index];
     let entry = blockDocuments.get(index);
     if (!entry) {
         const task = pdfjsLib.getDocument({
@@ -74,14 +79,17 @@ async function withPage(num, callback) {
     blockDocuments.set(index, entry);
     try {
         const document = await entry.promise;
+        if (generation !== documentGeneration) throw new Error('Documento atualizado.');
         let page = pageProxyCache.get(num);
         if (!page) {
-            page = await document.getPage(num - documentParts[index].start + 1);
+            page = await document.getPage(num - part.start + 1);
+            if (generation !== documentGeneration) throw new Error('Documento atualizado.');
             pageProxyCache.set(num, page);
         }
         return await callback(page);
     } finally {
         entry.users--;
+        if (generation === documentGeneration) {
         for (const [oldIndex, oldEntry] of blockDocuments) {
             if (blockDocuments.size <= 3) break;
             if (oldEntry.users) continue;
@@ -91,6 +99,7 @@ async function withPage(num, callback) {
                 if (page >= part.start && page <= part.end) pageProxyCache.delete(page);
             }
             oldEntry.task.destroy().catch(function () {});
+        }
         }
     }
 }
@@ -142,6 +151,7 @@ function pruneCache() {
 
 async function renderPage(num, isPrefetch) {
     if (!pdfDoc) return;
+    const generation = documentGeneration;
 
     const scale = currentScale;
     const key = cacheKey(num, scale);
@@ -204,6 +214,10 @@ async function renderPage(num, isPrefetch) {
             return bitmap;
         });
 
+        if (generation !== documentGeneration) {
+            if (bitmap.close) bitmap.close();
+            return;
+        }
         // A zoom change may have happened while this page was rendering.
         if (scale !== currentScale) {
             if (bitmap.close) bitmap.close();
@@ -242,10 +256,12 @@ async function renderPage(num, isPrefetch) {
             }
         }
     } catch (err) {
+        if (generation !== documentGeneration) return;
         if (err && err.name === 'RenderingCancelledException') return;
         if (!isPrefetch) {
             rendering = false;
             currentRenderTask = null;
+            if (!refreshTask && await refreshChangedDocument(num)) return;
             loadingMsg.textContent = 'Erro ao carregar a página. Tente novamente ou recarregue.';
             document.body.appendChild(loadingMsg);
             pageNumPending = null;
@@ -310,10 +326,14 @@ function fitToWindow() {
 }
 
 // Fetch only the page map, then open the first small PDF block.
-async function loadDocument() {
-    const response = await fetch(infoUrl, { credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok) throw new Error('Documento indisponível.');
-    const info = await response.json();
+async function loadDocument(metadata, page = 1) {
+    let info = metadata;
+    if (!info) {
+        const response = await fetch(infoUrl, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) throw new Error('Documento indisponível.');
+        info = await response.json();
+    }
+    loadedVersion = info.version || null;
     documentParts = info.parts || [{ start: 1, end: info.pageCount || totalPagesFromAttr, url: pdfUrl }];
     // Legacy documents with unknown page counts still use their real PDF count.
     if (!info.parts) {
@@ -327,7 +347,26 @@ async function loadDocument() {
     pdfDoc = { numPages: info.pageCount };
     totalSpan.textContent = pdfDoc.numPages;
     pageInput.max = pdfDoc.numPages;
-    await renderPage(1);
+    await renderPage(Math.max(1, Math.min(pdfDoc.numPages, page)));
+}
+
+async function refreshChangedDocument(page) {
+    refreshTask = (async function () {
+        const response = await fetch(infoUrl, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) return false;
+        const info = await response.json();
+        if (!info.version || info.version === loadedVersion) return false;
+        documentGeneration++;
+        prefetchGeneration++;
+        for (const bitmap of renderCache.values()) if (bitmap.close) bitmap.close();
+        renderCache.clear(); pageProxyCache.clear();
+        const entries = Array.from(blockDocuments.values()); blockDocuments.clear();
+        await Promise.allSettled(entries.map(entry => entry.task.destroy()));
+        pageNumPending = null;
+        await loadDocument(info, page);
+        return true;
+    })().catch(function () { return false; });
+    try { return await refreshTask; } finally { refreshTask = null; }
 }
 
 loadDocument().catch(function (err) {

@@ -10,6 +10,7 @@ function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {
     const elements = new Map(), requests = [], blobs = new Map(), timers = new Map(), holds = new Map();
     const revoked = [], pdfOpened = [];
     let serial = 0, clock = 0, fail = null;
+    let version = 'version', pageCount = 4;
     const prefix = '/admin/links/1/preview';
     function element(id) {
         if (elements.has(id)) return elements.get(id);
@@ -56,13 +57,14 @@ function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {
         fetch: async url => {
             requests.push(url);
             if (url.endsWith('/info')) return { ok: true, json: async () => mode === 'images' ?
-                { version: 'version', pageCount: 4 } : { pageCount: 4, parts: [
+                { version, pageCount } : { pageCount: 4, parts: [
                     { start: 1, end: 2, url: prefix + '/pdf/parts/v/0' },
                     { start: 3, end: 4, url: prefix + '/pdf/parts/v/1' }] } };
             if (holds.has(url)) await holds.get(url).promise;
-            const failed = fail === url;
+            const stale = !url.includes('/images/' + version + '/');
+            const failed = fail === url || stale;
             if (failed) fail = null;
-            return { ok: !failed, status: failed ? 503 : 200,
+            return { ok: !failed, status: stale ? 409 : failed ? 503 : 200,
                 json: async () => ({ error: 'Falha temporária' }),
                 blob: async () => ({ size: 123456, profile: url.split('/').at(-1), url }),
                 headers: { get: name => name === 'X-Preview-Cache' ? 'HIT' : 'prepare;dur=0' } };
@@ -78,6 +80,7 @@ function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {
         return () => { release(); holds.delete(url); };
     }
     return { elements, requests, revoked, blobs, window, pdfOpened, settle, go, hold,
+        replace: (next, pages = 4) => { version = next; pageCount = pages; },
         selectZoom: async value => { element('zoom-value').value = String(value); element('zoom-value').listeners.change(); await settle(); },
         click: async id => { element(id).listeners.click(); await settle(); },
         failPage: page => { fail = `${prefix}/images/version/${page}/view`; },
@@ -213,4 +216,33 @@ test('PDF comparison uses protected PDF blocks and never requests image conversi
     assert.equal(p.elements.get('page-canvas').page, 4);
     assert.ok(p.pdfOpened.at(-1).endsWith('/pdf/parts/v/1'));
     assert.equal(p.elements.get('next').disabled, true);
+});
+
+test('a replaced source refreshes metadata, clamps the page and preserves zoom without reopening the access', async () => {
+    const p = pilot(); await p.settle(); await p.go(3); await p.selectZoom(130);
+    const old = p.elements.get('page-image').src;
+    p.replace('next-version', 2);
+    await p.go(4); await p.settle();
+    const image = p.elements.get('page-image');
+    assert.notEqual(image.src, old);
+    assert.ok(p.blobs.get(image.src).url.endsWith('/images/next-version/2/detail'));
+    assert.equal(p.elements.get('page-number').value, 2);
+    assert.equal(p.elements.get('page-total').textContent, 2);
+    assert.equal(p.elements.get('zoom-value').value, '130');
+    assert.equal(p.elements.get('page-status').hidden, true);
+    assert.equal(p.requests.filter(url => url.endsWith('/info')).length, 2);
+    assert.ok(p.requests.every(url => !/^\/v\/.+\/view(?:\?|$)/.test(url)));
+    await p.go(1);
+    assert.ok(p.blobs.get(image.src).url.includes('/images/next-version/1/detail'));
+});
+
+test('a delayed old response cannot overwrite the replacement image', async () => {
+    const p = pilot(); await p.settle();
+    const release = p.hold(3); await p.go(3);
+    p.replace('new-version'); await p.go(4); await p.settle();
+    const visible = p.elements.get('page-image').src;
+    assert.ok(p.blobs.get(visible).url.includes('/images/new-version/4/view'));
+    release(); await p.settle();
+    assert.equal(p.elements.get('page-image').src, visible);
+    assert.equal(p.elements.get('page-status').hidden, true);
 });

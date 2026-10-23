@@ -14,6 +14,7 @@ const { getLinkById } = require('../services/accessService');
 const { getReadyImage } = require('../services/imagePreviewService');
 const { readyForLink } = require('../services/imagePreparationService');
 const edgeMedia = require('../services/edgeMediaService');
+const { documentVersion } = require('../utils/documentVersion');
 
 router.use(security);
 
@@ -25,16 +26,29 @@ router.get('/pdf/:token/info', authorizePdf, (req, res) => {
     const link = req.pdfLink;
     const manifest = readManifest(sourceFile(link));
     const prefix = `/api/pdf/${encodeURIComponent(req.params.token)}`;
+    const revision = documentVersion(link);
+    if (!req.session.pdfSources) req.session.pdfSources = {};
+    req.session.pdfSources[req.params.token] = revision;
     res.json({
         pageCount: manifest ? manifest.pageCount : (link.page_count || null),
         title: link.document_title,
+        version: revision,
         parts: manifest ? manifest.parts.map((part, index) => ({
             start: part.start, end: part.end,
-            url: `${prefix}/parts/${manifest.version}/${index}`
+            url: `${prefix}/parts/${manifest.version}/${index}?revision=${revision}`
         })) : null,
-        url: `${prefix}/document`
+        url: `${prefix}/document?revision=${revision}`
     });
 });
+
+function currentSource(req, res, next) {
+    const revision = documentVersion(req.pdfLink);
+    const expected = req.query.revision || req.session.pdfSources?.[req.params.token];
+    if (expected && expected !== revision) return res.status(409).json({ error: 'Documento atualizado. Atualize a visualização.' });
+    if (!req.session.pdfSources) req.session.pdfSources = {};
+    req.session.pdfSources[req.params.token] = revision;
+    next();
+}
 
 function sendPdf(req, res, filePath) {
     // Express implements standard byte ranges, HEAD, and stream cancellation.
@@ -55,8 +69,10 @@ async function sendAccessPdf(req, res, source) {
         const root = sourceFile(req.pdfLink) + '.parts/access-cache';
         const file = await getMarkedPdf(source, req.pdfLink.version_code, root);
         // Recheck revocation/expiry after asynchronous preparation.
-        const error = unavailable(getLinkByToken(req.params.token));
+        const current = getLinkByToken(req.params.token);
+        const error = unavailable(current);
         if (error) return res.status(error.status).json({ error: error.error });
+        if (current.stored_filename !== req.pdfLink.stored_filename) return res.status(409).json({ error: 'Documento atualizado. Atualize a visualização.' });
         return sendPdf(req, res, file);
     } catch (error) {
         console.error('[ACCESS PDF]', error.message);
@@ -65,11 +81,11 @@ async function sendAccessPdf(req, res, source) {
     }
 }
 
-router.get('/pdf/:token/document', authorizePdf, (req, res) => {
+router.get('/pdf/:token/document', authorizePdf, currentSource, (req, res) => {
     return sendAccessPdf(req, res, sourceFile(req.pdfLink));
 });
 
-router.get('/pdf/:token/parts/:version/:index', authorizePdf, (req, res) => {
+router.get('/pdf/:token/parts/:version/:index', authorizePdf, currentSource, (req, res) => {
     const file = sourceFile(req.pdfLink);
     const manifest = readManifest(file, req.params.version);
     const index = Number(req.params.index);
@@ -92,13 +108,16 @@ router.get('/images/:token/info', authorizePdf, async (req, res) => {
 router.get('/images/:token/images/:version/:page/:profile', authorizePdf, async (req, res) => {
     try {
         const link = req.pdfLink, doc = getDocumentById(link.document_id);
+        if (!doc || doc.stored_filename !== link.stored_filename) return res.status(409).json({ error: 'Documento atualizado. Atualize a visualização.' });
         if (!/^[a-f0-9]{64}$/.test(req.params.version) || !/^[1-9]\d{0,5}$/.test(req.params.page)) return res.status(400).end();
         const info = doc && await readyForLink(link, doc);
         if (!info) return res.status(503).json({ error: 'As imagens estão sendo preparadas.' });
         const image = await getReadyImage(sourceFile(link), link.version_code, Number(req.params.page), req.params.profile,
             req.params.version, doc.page_count);
-        const error = unavailable(getLinkByToken(req.params.token));
+        const current = getLinkByToken(req.params.token);
+        const error = unavailable(current);
         if (error) return res.status(error.status).json({ error: error.error });
+        if (current.stored_filename !== link.stored_filename) return res.status(409).json({ error: 'Documento atualizado. Atualize a visualização.' });
         res.setHeader('Cache-Control', 'private, no-store');
         const job = require('../config/database').prepare('SELECT storage FROM image_preparations WHERE job_key=?').get(`access:${link.id}`);
         const url = job.storage === edgeMedia.storageIdentity() && edgeMedia.edgeUrl({ documentId: doc.id, linkId: link.id,

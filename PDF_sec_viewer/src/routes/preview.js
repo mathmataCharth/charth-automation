@@ -9,6 +9,7 @@ const { getDocumentById } = require('../services/documentService');
 const { readManifest } = require('../services/pdfPartsService');
 const { getMarkedPdf } = require('../services/watermarkService');
 const { getPreviewInfo, getReadyImage } = require('../services/imagePreviewService');
+const { documentVersion } = require('../utils/documentVersion');
 
 router.use(security);
 router.use((req, res, next) => {
@@ -17,19 +18,27 @@ router.use((req, res, next) => {
     return res.status(401).json({ error: 'Entre no painel para continuar o teste.' });
 });
 
-function context(id) {
+function context(id, revisionId) {
     if (!/^[1-9]\d*$/.test(String(id))) return null;
     const link = getLinkById(id);
-    const doc = link && getDocumentById(link.document_id);
+    let doc = link && getDocumentById(link.document_id);
     if (!link || !doc) return null;
+    let prefix = `/admin/links/${link.id}/preview`;
+    if (revisionId !== undefined) {
+        if (!/^[1-9]\d*$/.test(String(revisionId))) return null;
+        const revision = require('../services/documentRevisionService').getRevision(revisionId, doc.id);
+        if (!revision || !['active','archived','preparing'].includes(revision.status)) return null;
+        doc = { ...doc, stored_filename: revision.stored_filename, original_filename: revision.original_filename, page_count: revision.page_count };
+        prefix += `/revisions/${revision.id}`;
+    }
     const upload = path.resolve(process.env.UPLOAD_DIR || './uploads');
     const source = path.resolve(upload, doc.stored_filename);
     if (!source.startsWith(upload + path.sep)) return null;
-    return { link, doc, source, prefix: `/admin/links/${link.id}/preview` };
+    return { link, doc, source, prefix };
 }
 
 router.use((req, res, next) => {
-    req.preview = context(req.params.id);
+    req.preview = context(req.params.id, req.params.revisionId);
     if (!req.preview) return res.status(404).send('Acesso não encontrado.');
     next();
 });
@@ -49,7 +58,7 @@ router.get('/info', async (req, res) => {
 });
 
 function stillAvailable(req) {
-    const current = context(req.params.id);
+    const current = context(req.params.id, req.params.revisionId);
     return current && current.source === req.preview.source && current.link.version_code === req.preview.link.version_code;
 }
 
@@ -86,16 +95,18 @@ router.get('/pdf/info', async (req, res) => {
         const { source, prefix, doc } = req.preview;
         const manifest = readManifest(source);
         const info = await getPreviewInfo(source, doc.page_count);
-        res.json({ pageCount: info.pageCount, url: prefix + '/pdf/document',
+        const revision = documentVersion(doc);
+        res.json({ pageCount: info.pageCount, version: revision, url: prefix + '/pdf/document?revision=' + revision,
             parts: manifest ? manifest.parts.map((part, index) => ({ ...part,
-                url: `${prefix}/pdf/parts/${manifest.version}/${index}` })) : null });
+                url: `${prefix}/pdf/parts/${manifest.version}/${index}?revision=${revision}` })) : null });
     } catch (_) { res.status(503).json({ error: 'Não foi possível carregar o PDF.' }); }
 });
 
 async function sendPreviewPdf(req, res, source) {
+    if (req.query.revision && req.query.revision !== documentVersion(req.preview.doc)) return res.status(409).json({ error: 'Documento atualizado. Recarregue a versão.' });
     try {
         const file = await getMarkedPdf(source, req.preview.link.version_code, req.preview.source + '.parts/access-cache');
-        if (!stillAvailable(req)) return res.status(404).json({ error: 'Acesso removido durante o teste.' });
+        if (!stillAvailable(req)) return res.status(409).json({ error: 'Documento atualizado. Recarregue a versão.' });
         return sendFile(req, res, file);
     } catch (error) {
         console.error('[PDF PREVIEW]', error.message);

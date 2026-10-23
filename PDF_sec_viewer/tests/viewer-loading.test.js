@@ -13,6 +13,7 @@ function viewer({ legacy = false } = {}) {
     const opened = [], destroyed = [], drawn = [], idle = [];
     const starts = [1, 6, 26, 46, 66];
     let fail = null;
+    let version = 'original', replaced = false;
     function element(id) {
         if (elements.has(id)) return elements.get(id);
         const element = {
@@ -42,16 +43,16 @@ function viewer({ legacy = false } = {}) {
             page: off.context.page, close() {} }),
         fetch: async (url) => {
             assert.equal(url, '/info');
-            return { ok: true, json: async () => ({ pageCount: legacy ? null : 228,
-                parts: legacy ? null : parts, url: '/whole' }) };
+            return { ok: true, json: async () => ({ version, pageCount: replaced ? 2 : legacy ? null : 228,
+                parts: replaced ? [{ start: 1, end: 2, url: '/replacement0' }] : legacy ? null : parts, url: '/whole' }) };
         },
         pdfjsLib: {
             GlobalWorkerOptions: {},
             getDocument({ url }) {
                 opened.push(url);
                 const index = url === '/whole' ? 0 : Number(url.slice(-1));
-                const promise = fail === url ? Promise.reject(new Error('network error')) : Promise.resolve({
-                    numPages: legacy ? 228 : parts[index].end - parts[index].start + 1,
+                const promise = fail === url || replaced && url.startsWith('/block') ? Promise.reject(new Error('network error')) : Promise.resolve({
+                    numPages: url === '/replacement0' ? 2 : legacy ? 228 : parts[index].end - parts[index].start + 1,
                     async getPage(local) {
                         const global = (legacy ? 1 : starts[index]) + local - 1;
                         return {
@@ -72,6 +73,7 @@ function viewer({ legacy = false } = {}) {
     const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(setImmediate); };
     const go = async (num) => { vm.runInContext(`queueRenderPage(${num})`, context); await settle(); };
     return { elements, opened, destroyed, drawn, idle, settle, go, context,
+        replace: () => { version = 'replacement'; replaced = true; },
         failNext: (url) => { fail = url; } };
 }
 
@@ -125,4 +127,18 @@ test('unprepared documents retain their real page count and original PDF loading
     assert.equal(v.elements.get('total-pages').textContent, 228);
     await v.go(228);
     assert.equal(v.drawn.at(-1), 228);
+});
+
+test('a source update clears cached documents and page images and preserves the selected zoom', async () => {
+    const v = viewer(); await v.settle(); await v.go(5);
+    v.replace(); await v.go(26); await v.settle();
+    assert.ok(v.opened.includes('/replacement0'));
+    assert.ok(v.destroyed.includes('/block0'));
+    assert.equal(v.drawn.at(-1), 2);
+    assert.equal(v.elements.get('total-pages').textContent, 2);
+    assert.equal(v.elements.get('zoom-label').textContent, '65%');
+    await v.go(1);
+    assert.equal(v.drawn.at(-1), 1);
+    assert.equal(vm.runInContext('loadedVersion', v.context), 'replacement');
+    assert.ok(Array.from(vm.runInContext('renderCache.keys()', v.context)).every(key => Number(key.split(':')[0]) <= 2));
 });

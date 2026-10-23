@@ -21,7 +21,7 @@ async function scheduleDocument(id, { retry = false } = {}) {
     const now = Date.now();
     db.transaction(() => {
         // Recheck existence after the asynchronous file inspection (document deletion).
-        if (!db.prepare('SELECT id FROM documents WHERE id=?').get(id)) return;
+        if (db.prepare('SELECT stored_filename FROM documents WHERE id=?').get(id)?.stored_filename !== doc.stored_filename) return;
         if (!doc.page_count) db.prepare('UPDATE documents SET page_count=? WHERE id=? AND page_count IS NULL').run(info.pageCount, id);
         for (const linkId of [null, ...links.map(row => row.id)]) {
             if (linkId && !db.prepare('SELECT id FROM access_links WHERE id=? AND document_id=?').get(linkId, id)) continue;
@@ -50,7 +50,7 @@ function statusForDocument(id) {
     return db.prepare(`SELECT j.access_link_id AS linkId,
         CASE WHEN j.status<>'ready' AND (d.is_active=0 OR al.is_active=0) THEN 'paused' ELSE j.status END AS status,
         j.completed,j.total,j.error FROM image_preparations j JOIN documents d ON d.id=j.document_id
-        LEFT JOIN access_links al ON al.id=j.access_link_id WHERE j.document_id=? ORDER BY j.id`).all(id).map(row => ({ ...row,
+        LEFT JOIN access_links al ON al.id=j.access_link_id WHERE j.document_id=? AND j.revision_id IS NULL ORDER BY j.id`).all(id).map(row => ({ ...row,
         error: row.error ? 'A preparação foi interrompida. Tente novamente ou verifique o espaço disponível.' : null }));
 }
 
@@ -72,14 +72,17 @@ function prioritizeLink(id) {
 
 function claimJob(now = Date.now()) {
     return db.transaction(() => {
-        const row = db.prepare(`SELECT j.*,d.stored_filename,d.page_count,al.version_code
+        const row = db.prepare(`SELECT j.*,COALESCE(r.stored_filename,d.stored_filename) stored_filename,
+            CASE WHEN j.revision_id IS NULL THEN d.page_count ELSE r.page_count END page_count,al.version_code
             FROM image_preparations j JOIN documents d ON d.id=j.document_id
+            LEFT JOIN document_revisions r ON r.id=j.revision_id
             LEFT JOIN access_links al ON al.id=j.access_link_id
-            WHERE d.is_active=1 AND (j.access_link_id IS NULL OR al.is_active=1)
+            WHERE (j.revision_id IS NULL AND d.is_active=1 OR r.status='preparing') AND (j.access_link_id IS NULL OR al.is_active=1)
                 AND j.status IN ('queued','working','failed') AND j.attempts<5 AND j.retry_at<=? AND j.lease_until<=?
                 AND NOT EXISTS (SELECT 1 FROM image_preparations locked WHERE locked.lease_until>?)
+                AND NOT EXISTS (SELECT 1 FROM document_revisions locked WHERE locked.lease_until>?)
             ORDER BY j.priority DESC, CASE WHEN j.completed<MIN(5,j.total) THEN 0 ELSE 1 END,
-                j.access_link_id DESC, j.completed, j.updated_at, j.id LIMIT 1`).get(now, now, now);
+                j.access_link_id DESC, j.completed, j.updated_at, j.id LIMIT 1`).get(now, now, now, now);
         if (!row) return null;
         const lease = now + 300000;
         db.prepare("UPDATE image_preparations SET status='working',lease_until=?,updated_at=? WHERE id=?").run(lease, now, row.id);
@@ -94,7 +97,8 @@ async function runNext({ renderBase = prepareBaseImage, renderMarked = getMarked
         const source = sourceFor(job);
         const info = await getPreviewInfo(source, job.page_count);
         if (info.version !== job.version) {
-            await scheduleDocument(job.document_id);
+            if (job.revision_id) await require('./documentRevisionService').scheduleRevision(job.revision_id);
+            else await scheduleDocument(job.document_id);
             return true;
         }
         const disk = await fs.promises.statfs(path.dirname(source));
@@ -112,8 +116,8 @@ async function runNext({ renderBase = prepareBaseImage, renderMarked = getMarked
             db.prepare(`UPDATE image_preparations SET completed=MAX(completed,?),
                 status=CASE WHEN MAX(completed,?)>=total THEN 'ready' ELSE 'queued' END,
                 attempts=0,retry_at=0,lease_until=0,error=NULL,updated_at=?
-                WHERE document_id=? AND access_link_id IS NULL AND version=?`)
-                .run(index + 1, index + 1, Date.now(), job.document_id, job.version);
+                WHERE document_id=? AND access_link_id IS NULL AND version=? AND revision_id IS ?`)
+                .run(index + 1, index + 1, Date.now(), job.document_id, job.version, job.revision_id);
             const image = await renderMarked(source, job.version_code, page, profile, job.version, info.pageCount);
             await upload({ documentId: job.document_id, linkId: job.access_link_id, version: job.version, page, profile, file: image.file });
         }
