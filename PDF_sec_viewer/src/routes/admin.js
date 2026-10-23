@@ -203,7 +203,6 @@ router.get('/documents/:id', adminAuth, (req, res) => {
 router.post('/documents/:id/revisions', adminAuth, (req, res) => {
     if (!getDocumentById(req.params.id)) return res.status(404).send('Documento não encontrado.');
     upload.single('pdf')(req, res, async uploadError => {
-        let submitted = false;
         try {
             if (uploadError) throw Object.assign(new Error(uploadError.message), { status: 400 });
             if (!req.file) throw Object.assign(new Error('Selecione o novo PDF.'), { status: 400 });
@@ -213,16 +212,15 @@ router.post('/documents/:id/revisions', adminAuth, (req, res) => {
             if (header.toString('ascii') !== '%PDF-') throw Object.assign(new Error('O arquivo enviado não é um PDF válido.'), { status: 400 });
             await fs.promises.chmod(req.file.path, 0o600);
             revisions.createRevision(Number(req.params.id), req.file, req.body.document_version, req.session.adminUsername);
-            submitted = true;
-            return res.redirect(`/admin/documents/${req.params.id}#document-revisions`);
         } catch (error) {
-            return res.status(error.status || 503).send(error.status ? error.message : 'Não foi possível receber a atualização. A versão atual foi preservada.');
-        } finally {
-            if (!submitted && req.file) {
+            // Complete cleanup before responding, including competing/stale uploads.
+            if (req.file) {
                 const file = path.resolve(req.file.path);
                 if (file.startsWith(uploadDir + path.sep)) await fs.promises.unlink(file).catch(() => {});
             }
+            return res.status(error.status || 503).send(error.status ? error.message : 'Não foi possível receber a atualização. A versão atual foi preservada.');
         }
+        return res.redirect(`/admin/documents/${req.params.id}#document-revisions`);
     });
 });
 
