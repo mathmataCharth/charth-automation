@@ -44,12 +44,16 @@
             <button id="repeat">Repetir teste</button>
         </nav>
     </header>
-    <main id="preview" data-prefix="<%= prefix %>" data-mode="<%= mode %>" data-page="<%= initialPage %>" aria-label="Prévia do lookbook">
-        <div id="message" role="status" aria-live="polite">Carregando página…</div>
-        <img id="page-image" class="page-surface" alt="Página do lookbook" draggable="false" hidden>
-        <canvas id="page-canvas" class="page-surface" hidden aria-label="Página do lookbook em PDF"></canvas>
-        <button id="retry" hidden>Tentar novamente</button>
-    </main>
+    <div class="preview-viewport">
+        <main id="preview" data-prefix="<%= prefix %>" data-mode="<%= mode %>" data-page="<%= initialPage %>" aria-label="Prévia do lookbook" aria-busy="true">
+            <img id="page-image" class="page-surface" alt="Página do lookbook" draggable="false" hidden>
+            <canvas id="page-canvas" class="page-surface" hidden aria-label="Página do lookbook em PDF"></canvas>
+        </main>
+        <div id="page-status">
+            <div id="message" role="status" aria-live="polite">Carregando página…</div>
+            <button id="retry" hidden>Tentar novamente</button>
+        </div>
+    </div>
     <footer class="test-metrics" aria-live="polite">
         <span>Primeira exibição: <strong id="first-time">—</strong></span>
         <span>Esta página: <strong id="page-time">—</strong></span>

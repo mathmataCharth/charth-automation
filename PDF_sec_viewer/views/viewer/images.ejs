@@ -30,12 +30,16 @@
             </div>
         </nav>
     </header>
-    <main id="preview" data-prefix="/api/images/<%= token %>" data-mode="images" data-page="1" data-customer="true" aria-label="Lookbook">
-        <div id="message" role="status" aria-live="polite">Carregando página…</div>
-        <img id="page-image" class="page-surface" alt="Página do lookbook" draggable="false" hidden>
-        <canvas id="page-canvas" hidden></canvas>
-        <button id="retry" hidden>Tentar novamente</button>
-    </main>
+    <div class="preview-viewport">
+        <main id="preview" data-prefix="/api/images/<%= token %>" data-mode="images" data-page="1" data-customer="true" aria-label="Lookbook" aria-busy="true">
+            <img id="page-image" class="page-surface" alt="Página do lookbook" draggable="false" hidden>
+            <canvas id="page-canvas" hidden></canvas>
+        </main>
+        <div id="page-status">
+            <div id="message" role="status" aria-live="polite">Carregando página…</div>
+            <button id="retry" hidden>Tentar novamente</button>
+        </div>
+    </div>
     <div hidden aria-hidden="true">
         <a id="mode-images"></a><a id="mode-pdf"></a><button id="repeat"></button>
         <span id="first-time"></span><span id="page-time"></span><span id="asset-details"></span><span id="cache-details"></span>

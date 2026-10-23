@@ -23,12 +23,14 @@ h1 { font-size: 16px; margin: 0 0 6px; font-weight: 500; overflow-wrap: anywhere
 #page-number { width: 55px; background: #222; color: white; border: 1px solid #555; border-radius: 3px; text-align: center; padding: 7px 3px; }
 #zoom-value { width: 70px; height: 32px; background: #222; color: #eee; border: 1px solid #555; border-radius: 3px; padding: 3px; }
 #repeat { margin-left: auto; color: #e4d5d3; }
-#preview { position: relative; flex: 1; min-height: 0; padding: 20px; overflow: auto; }
-.page-surface { display: block; margin: 0 auto; max-width: none; user-select: none; pointer-events: none; background: white; }
+.preview-viewport { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
+#preview { position: relative; flex: 1; min-width: 0; min-height: 0; padding: 20px; overflow: auto; overflow-anchor: none; }
+.page-surface { display: block; margin: 0 auto; max-width: none; height: auto; user-select: none; pointer-events: none; background: white; }
 [hidden] { display: none !important; }
-#message { text-align: center; margin: 15px auto; color: #bbb; font-size: 14px; line-height: 1.5; }
+#page-status { position: absolute; z-index: 2; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 8px 12px; border: 1px solid #444; border-radius: 5px; background: rgba(17,17,17,.94); box-shadow: 0 2px 10px #0003; pointer-events: none; }
+#message { margin: 0; color: #ddd; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 #message.is-error { color: #f2c6c6; }
-#retry { display: block; margin: 12px auto; }
+#retry { flex: none; margin: 0; pointer-events: auto; }
 .test-metrics { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; flex: none; padding: 12px 18px; border-top: 1px solid #333; background: #111; color: #aaa; font-size: 12px; line-height: 1.5; }
 .test-metrics strong { color: #eee; font-weight: 400; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
@@ -57,6 +59,7 @@ h1 { font-size: 16px; margin: 0 0 6px; font-weight: 500; overflow-wrap: anywhere
     .customer-viewer #page-number { width: 40px; }
     .customer-viewer #zoom-value { width: 64px; }
     .customer-viewer #preview { padding: 6px; }
+    #page-status { right: 8px; bottom: 8px; max-width: calc(100% - 16px); flex-wrap: wrap; }
 }
 @media (max-width: 360px) {
     .customer-viewer button { padding: 5px 6px; font-size: 12px; }

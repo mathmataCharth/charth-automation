@@ -8,12 +8,13 @@
     const image = el('page-image');
     const canvas = el('page-canvas');
     const message = el('message');
+    const status = el('page-status');
     const images = new Map();
     const documents = new Map();
     let info, target = Number(stage.dataset.page) || 1, zoom = 0.75, revision = 0;
     let fitPage = false;
-    let visibleUrl = '', firstShown = false, renderTask = null, pdfLibrary = null;
-    let prefetchTimer, resizeTimer;
+    let visibleUrl = '', visiblePage = 0, firstShown = false, renderTask = null, pdfLibrary = null;
+    let prefetchTimer, resizeTimer, statusTimer;
     const now = () => performance.now();
     const paint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const seconds = value => (value / 1000).toFixed(2).replace('.', ',') + ' s';
@@ -28,6 +29,35 @@
         const available = availableSize();
         // Round down to the same 5% steps shown in the size selector.
         return Math.max(0.25, Math.floor(Math.min(1, available.height * width / height / available.width) * 20) / 20);
+    }
+
+    function loading(text) {
+        clearTimeout(statusTimer);
+        status.hidden = firstShown;
+        message.hidden = false;
+        message.classList.remove('is-error');
+        message.textContent = text;
+        el('retry').hidden = true;
+        stage.setAttribute('aria-busy', 'true');
+        // Cached/preloaded pages should switch without a flashing loading badge.
+        if (firstShown) statusTimer = setTimeout(() => { status.hidden = false; }, 200);
+    }
+
+    function loaded() {
+        clearTimeout(statusTimer);
+        status.hidden = true;
+        message.hidden = true;
+        stage.setAttribute('aria-busy', 'false');
+    }
+
+    function failed(text) {
+        clearTimeout(statusTimer);
+        status.hidden = false;
+        message.hidden = false;
+        message.textContent = text;
+        message.classList.add('is-error');
+        el('retry').hidden = false;
+        stage.setAttribute('aria-busy', 'false');
     }
 
     function controls() {
@@ -154,10 +184,7 @@
         const token = ++revision;
         clearTimeout(prefetchTimer);
         if (renderTask) { try { renderTask.cancel(); } catch (_) {} }
-        message.classList.remove('is-error');
-        message.textContent = zoom > 1.25 && mode === 'images' ? 'Carregando detalhes em alta resolução…' : 'Carregando página…';
-        message.hidden = false;
-        el('retry').hidden = true;
+        loading(zoom > 1.25 && mode === 'images' ? 'Carregando detalhes em alta resolução…' : 'Carregando página…');
         controls();
         try {
             if (mode === 'images') {
@@ -166,13 +193,13 @@
                 if (token !== revision) return;
                 if (fitPage) zoom = fitZoom(entry.width, entry.height);
                 visibleUrl = entry.url;
+                image.width = entry.width;
+                image.height = entry.height;
                 image.src = entry.url;
                 image.style.width = Math.round(fitWidth() * zoom) + 'px';
                 image.alt = 'Página ' + target + ' do lookbook';
                 image.hidden = false;
                 canvas.hidden = true;
-                await image.decode();
-                if (token !== revision) return;
                 el('asset-details').textContent = (profile === 'detail' ? 'Alta resolução' : 'Visualização') +
                     ' · ' + Math.max(entry.width, entry.height) + ' px · ' + bytes(entry.size);
                 el('cache-details').textContent = entry.memoryHit ? 'Imagem já carregada nesta tela' :
@@ -190,14 +217,19 @@
                 el('asset-details').textContent = 'PDF · carregamento por blocos';
                 el('cache-details').textContent = '';
             }
+            // Publish the decoded page and its scroll position in the same frame.
+            // Zoom/resize of the current page preserves the reader's position.
+            if (visiblePage !== target) {
+                stage.scrollTop = 0;
+                stage.scrollLeft = 0;
+            }
+            visiblePage = target;
+            loaded();
             await paint();
             if (token !== revision) return;
             const elapsed = seconds(now() - started);
             el('page-time').textContent = elapsed;
             if (!firstShown) { firstShown = true; el('first-time').textContent = seconds(now()); }
-            message.hidden = true;
-            stage.scrollTop = 0;
-            stage.scrollLeft = 0;
             controls();
             if (mode === 'images' && target < info.pageCount) {
                 const nextPage = target + 1;
@@ -208,22 +240,19 @@
             }
         } catch (error) {
             if (token !== revision) return;
-            message.textContent = error.message || 'Não foi possível carregar a página.';
-            message.classList.add('is-error');
-            el('retry').hidden = false;
+            failed(error.message || 'Não foi possível carregar a página.');
         }
     }
 
     async function start() {
+        loading('Carregando página…');
         try {
             const response = await fetch(prefix + (mode === 'pdf' ? '/pdf/info' : '/info'), { credentials: 'same-origin', cache: 'no-store' });
             if (!response.ok) throw new Error(response.status === 401 ? 'Sua sessão terminou. Abra novamente o link de acesso.' : 'Documento indisponível.');
             info = await response.json();
             await show(target, 0);
         } catch (error) {
-            message.textContent = error.message;
-            message.classList.add('is-error');
-            el('retry').hidden = false;
+            failed(error.message || 'Não foi possível carregar o documento.');
         }
     }
 
@@ -258,6 +287,8 @@
     window.addEventListener('pagehide', () => {
         revision++;
         clearTimeout(prefetchTimer);
+        clearTimeout(resizeTimer);
+        clearTimeout(statusTimer);
         for (const entry of images.values()) { entry.controller.abort(); if (entry.url) URL.revokeObjectURL(entry.url); }
         for (const entry of documents.values()) entry.task.destroy().catch(() => {});
     });

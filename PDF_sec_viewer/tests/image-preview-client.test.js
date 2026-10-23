@@ -15,7 +15,8 @@ function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {
         if (elements.has(id)) return elements.get(id);
         const classes = new Set();
         const value = { id, style: {}, hidden: true, value: '1', disabled: false, clientWidth: width, clientHeight: height,
-            dataset: { prefix, mode, page: '1' }, listeners: {},
+            dataset: { prefix, mode, page: '1' }, listeners: {}, attributes: {},
+            setAttribute(name, value) { this.attributes[name] = value; },
             classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) },
             addEventListener(name, callback) { this.listeners[name] = callback; },
             decode: async () => {}, blur() {}, getContext() {
@@ -70,8 +71,8 @@ function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {
     vm.runInContext(script, context);
     const settle = async () => { for (let i = 0; i < 12; i++) await new Promise(setImmediate); };
     const go = async page => { element('page-number').value = String(page); element('page-number').listeners.change(); await settle(); };
-    function hold(page) {
-        const url = `${prefix}/images/version/${page}/view`;
+    function hold(page, profile = 'view') {
+        const url = `${prefix}/images/version/${page}/${profile}`;
         let release;
         holds.set(url, { promise: new Promise(resolve => { release = resolve; }) });
         return () => { release(); holds.delete(url); };
@@ -80,6 +81,7 @@ function pilot(mode = 'images', { width = 1000, height = 800, padding = 20 } = {
         selectZoom: async value => { element('zoom-value').value = String(value); element('zoom-value').listeners.change(); await settle(); },
         click: async id => { element(id).listeners.click(); await settle(); },
         failPage: page => { fail = `${prefix}/images/version/${page}/view`; },
+        runStatusDelay: async () => { for (const [id, timer] of timers) if (timer.delay === 200) { timers.delete(id); timer.callback(); break; } await settle(); },
         runPrefetch: async () => { for (const [id, timer] of timers) if (timer.delay === 700) { timers.delete(id); timer.callback(); break; } await settle(); } };
 }
 
@@ -109,6 +111,43 @@ test('the image pilot initially fetches one page, prefetches one neighbor and re
     await p.click('fit');
     assert.equal(p.elements.get('zoom-value').value, '100');
     assert.equal(p.pdfOpened.length, 0);
+});
+
+test('slow pages keep the current decoded image and scroll position until the next page is ready', async () => {
+    const p = pilot();
+    await p.settle();
+    const image = p.elements.get('page-image'), stage = p.elements.get('preview');
+    const current = { src: image.src, width: image.style.width, height: image.height };
+    stage.scrollTop = 160; stage.scrollLeft = 45;
+    const release = p.hold(2);
+    await p.go(2);
+    assert.equal(stage.attributes['aria-busy'], 'true');
+    assert.equal(p.elements.get('page-status').hidden, true, 'brief loads do not flash the badge');
+    await p.runStatusDelay();
+    assert.equal(p.elements.get('page-status').hidden, false);
+    assert.deepEqual({ src: image.src, width: image.style.width, height: image.height }, current);
+    assert.equal(image.hidden, false);
+    assert.equal(stage.scrollTop, 160);
+    assert.equal(stage.scrollLeft, 45);
+    release(); await p.settle();
+    assert.ok(p.blobs.get(image.src).url.endsWith('/2/view'));
+    assert.equal(p.elements.get('page-status').hidden, true);
+    assert.equal(stage.attributes['aria-busy'], 'false');
+    assert.equal(stage.scrollTop, 0);
+    assert.equal(stage.scrollLeft, 0);
+});
+
+test('zoom preserves the reading position and cached transitions cancel the loading badge', async () => {
+    const p = pilot();
+    await p.settle();
+    const stage = p.elements.get('preview');
+    stage.scrollTop = 140; stage.scrollLeft = 55;
+    await p.click('zoom-in');
+    assert.equal(p.elements.get('zoom-value').value, '80');
+    assert.equal(stage.scrollTop, 140);
+    assert.equal(stage.scrollLeft, 55);
+    await p.runStatusDelay();
+    assert.equal(p.elements.get('page-status').hidden, true);
 });
 
 test('fit uses both screen dimensions and a selected zoom stays in 5% steps through page navigation', async () => {
@@ -154,6 +193,7 @@ test('failed pages can be retried and leaving the pilot releases image URLs', as
     p.failPage(2);
     await p.go(2);
     assert.equal(p.elements.get('retry').hidden, false);
+    assert.equal(p.elements.get('page-status').hidden, false);
     assert.match(p.elements.get('message').textContent, /Falha temporária/);
     await p.click('retry');
     assert.equal(p.elements.get('retry').hidden, true);
