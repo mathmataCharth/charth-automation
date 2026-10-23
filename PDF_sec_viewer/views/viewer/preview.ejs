@@ -35,7 +35,7 @@
                 <button id="zoom-out" aria-label="Reduzir zoom">−</button>
                 <select id="zoom-value" aria-label="Tamanho de visualização">
                     <% for (let percent = 25; percent <= 300; percent += 5) { %>
-                        <option value="<%= percent %>" <%= percent === 75 ? 'selected' : '' %>><%= percent %>%</option>
+                        <option value="<%= percent %>" <%= percent === 65 ? 'selected' : '' %>><%= percent %>%</option>
                     <% } %>
                 </select>
                 <button id="zoom-in" aria-label="Aumentar zoom">+</button>

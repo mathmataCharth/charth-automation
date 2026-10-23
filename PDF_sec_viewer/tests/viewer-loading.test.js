@@ -105,7 +105,7 @@ test('document cache is bounded while jumping between distant blocks and returni
     v.elements.get('btn-zoom-in').listeners.click();
     await v.settle();
     assert.equal(v.drawn.at(-1), 1);
-    assert.equal(v.elements.get('zoom-label').textContent, '80%');
+    assert.equal(v.elements.get('zoom-label').textContent, '70%');
 });
 
 test('failed block loads can be retried without a full reload', async () => {

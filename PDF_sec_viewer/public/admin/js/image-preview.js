@@ -11,7 +11,7 @@
     const status = el('page-status');
     const images = new Map();
     const documents = new Map();
-    let info, target = Number(stage.dataset.page) || 1, zoom = 0.75, revision = 0;
+    let info, target = Number(stage.dataset.page) || 1, zoom = 0.65, revision = 0;
     let fitPage = false;
     let visibleUrl = '', visiblePage = 0, firstShown = false, renderTask = null, pdfLibrary = null;
     let prefetchTimer, resizeTimer, statusTimer;

@@ -31,7 +31,7 @@ const ctx = canvas.getContext('2d', { alpha: false });
 
 let pdfDoc = null;
 let currentPage = 1;
-let currentScale = 0.75;
+let currentScale = 0.65;
 let rendering = false;
 let pageNumPending = null;
 let currentRenderTask = null;

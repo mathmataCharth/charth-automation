@@ -91,8 +91,8 @@ test('the image pilot initially fetches one page, prefetches one neighbor and re
     assert.deepEqual(p.requests, ['/admin/links/1/preview/info', '/admin/links/1/preview/images/version/1/view']);
     assert.equal(p.elements.get('page-image').hidden, false);
     assert.equal(p.elements.get('page-canvas').hidden, true);
-    assert.equal(p.elements.get('zoom-value').value, '75');
-    assert.equal(p.elements.get('page-image').style.width, '720px');
+    assert.equal(p.elements.get('zoom-value').value, '65');
+    assert.equal(p.elements.get('page-image').style.width, '624px');
     assert.match(p.elements.get('first-time').textContent, /s$/);
     await p.runPrefetch();
     assert.ok(p.requests.at(-1).endsWith('/2/view'));
@@ -102,7 +102,7 @@ test('the image pilot initially fetches one page, prefetches one neighbor and re
     assert.equal(p.elements.get('page-number').value, 2);
     assert.ok(p.elements.get('mode-pdf').href.endsWith('?mode=pdf&page=2'));
     await p.click('zoom-in');
-    assert.equal(p.elements.get('zoom-value').value, '80');
+    assert.equal(p.elements.get('zoom-value').value, '70');
     assert.equal(p.requests.length, before, 'a 5% change reuses the decoded image');
     await p.selectZoom(130);
     assert.ok(p.requests.at(-1).endsWith('/2/detail'));
@@ -143,7 +143,7 @@ test('zoom preserves the reading position and cached transitions cancel the load
     const stage = p.elements.get('preview');
     stage.scrollTop = 140; stage.scrollLeft = 55;
     await p.click('zoom-in');
-    assert.equal(p.elements.get('zoom-value').value, '80');
+    assert.equal(p.elements.get('zoom-value').value, '70');
     assert.equal(stage.scrollTop, 140);
     assert.equal(stage.scrollLeft, 55);
     await p.runStatusDelay();
@@ -153,7 +153,7 @@ test('zoom preserves the reading position and cached transitions cancel the load
 test('fit uses both screen dimensions and a selected zoom stays in 5% steps through page navigation', async () => {
     const p = pilot('images', { width: 1900, height: 840, padding: 8 });
     await p.settle();
-    assert.equal(p.elements.get('zoom-value').value, '75');
+    assert.equal(p.elements.get('zoom-value').value, '65');
     await p.click('fit');
     assert.equal(p.elements.get('zoom-value').value, '60');
     const displayedWidth = parseFloat(p.elements.get('page-image').style.width);
